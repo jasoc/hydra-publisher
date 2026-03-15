@@ -9,6 +9,8 @@ pub struct AppSettings {
     pub ai_model: String,
     pub language: String,
     pub recent_folders: Vec<String>,
+    #[serde(default)]
+    pub ebay_token: String,
 }
 
 impl Default for AppSettings {
@@ -30,6 +32,7 @@ impl Default for AppSettings {
             ai_model: "gpt-4o".to_string(),
             language: "en".to_string(),
             recent_folders: Vec::new(),
+            ebay_token: String::new(),
         }
     }
 }

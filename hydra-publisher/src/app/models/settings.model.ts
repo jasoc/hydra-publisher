@@ -5,4 +5,5 @@ export interface AppSettings {
   aiModel: string;
   language: string;
   recentFolders: string[];
+  ebayToken: string;
 }

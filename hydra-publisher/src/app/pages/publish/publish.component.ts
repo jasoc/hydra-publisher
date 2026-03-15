@@ -6,6 +6,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatStepperModule } from '@angular/material/stepper';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { CatalogService } from '../../services/catalog.service';
 import { PublishService } from '../../services/publish.service';
 import { Article } from '../../models/article.model';
@@ -22,6 +23,7 @@ import { PlatformInfo, PublishRecord } from '../../models/platform.model';
     MatProgressBarModule,
     MatSnackBarModule,
     MatStepperModule,
+    MatTooltipModule,
   ],
   templateUrl: './publish.component.html',
   styleUrl: './publish.component.scss',
@@ -37,15 +39,17 @@ export class PublishComponent implements OnInit {
   selectedArticleIds = signal<Set<string>>(new Set());
   matrixSelections = signal<Map<string, Set<string>>>(new Map()); // articleId -> Set<platformId>
 
-  publishedArticles = computed(() => {
-    const recs = this.records();
-    return recs.filter(r => r.status === 'Published');
-  });
+  publishedArticles = computed(() =>
+    this.records().filter(r => r.status === 'Published' || r.status === 'Updated')
+  );
 
-  publishingArticles = computed(() => {
-    const recs = this.records();
-    return recs.filter(r => r.status === 'Publishing');
-  });
+  publishingArticles = computed(() =>
+    this.records().filter(r => r.status === 'Publishing')
+  );
+
+  updatingArticles = computed(() =>
+    this.records().filter(r => r.status === 'Updating')
+  );
 
   constructor(
     private catalogService: CatalogService,
@@ -94,12 +98,10 @@ export class PublishComponent implements OnInit {
   }
 
   goToMatrix(): void {
-    // Initialize matrix: for each selected article, all platforms checked by default
     const matrix = new Map<string, Set<string>>();
     for (const articleId of this.selectedArticleIds()) {
       const platformSet = new Set<string>();
       for (const p of this.platforms()) {
-        // Check if already published
         const alreadyPublished = this.records().some(
           r => r.articleId === articleId && r.platformId === p.id && r.status === 'Published'
         );
@@ -140,6 +142,16 @@ export class PublishComponent implements OnInit {
     return this.articles().find(a => a.id === id)?.name || id;
   }
 
+  getPlatformName(id: string): string {
+    return this.platforms().find(p => p.id === id)?.name || id;
+  }
+
+  getStatusLabel(record: PublishRecord): string {
+    if (record.status === 'Published') return 'Published';
+    if (record.status === 'Updated') return 'Updated';
+    return '';
+  }
+
   async executePublish(): Promise<void> {
     const matrix = this.matrixSelections();
     const articleIds: string[] = [];
@@ -168,6 +180,16 @@ export class PublishComponent implements OnInit {
     } catch (err) {
       this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
       this.step.set('idle');
+    }
+  }
+
+  async updateRecord(record: PublishRecord): Promise<void> {
+    try {
+      await this.publishService.update([record.articleId], [record.platformId]);
+      this.records.set(this.publishService.records());
+      this.snackBar.open('Update complete!', 'OK', { duration: 3000 });
+    } catch (err) {
+      this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
     }
   }
 }

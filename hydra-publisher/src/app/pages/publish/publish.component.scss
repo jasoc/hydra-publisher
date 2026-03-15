@@ -63,6 +63,12 @@
   font-size: 12px;
 }
 
+.status-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
 .article-list {
   display: flex;
   flex-direction: column;

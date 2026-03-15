@@ -19,6 +19,11 @@ export class PublishService {
     await this.refreshRecords();
   }
 
+  async update(articleIds: string[], platformIds: string[]): Promise<void> {
+    await invoke('update_articles', { articleIds, platformIds });
+    await this.refreshRecords();
+  }
+
   async refreshRecords(): Promise<void> {
     const records = await invoke<PublishRecord[]>('get_publish_records');
     this.recordsSignal.set(records);

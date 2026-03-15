@@ -22,12 +22,18 @@ pub enum PublishStatus {
     Publishing,
     Published,
     Failed(String),
+    Updating,
+    Updated,
+    UpdateFailed(String),
 }
 
 pub trait Platform: Send + Sync {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn publish(&self, article: &Article) -> Result<(), String>;
+    fn update(&self, _article: &Article) -> Result<(), String> {
+        Err(format!("Update not supported by platform '{}'", self.id()))
+    }
 }
 
 pub struct TestPlatform;
@@ -47,6 +53,15 @@ impl Platform for TestPlatform {
             article.name,
             article.id,
             article.photos.len()
+        );
+        Ok(())
+    }
+
+    fn update(&self, article: &Article) -> Result<(), String> {
+        println!(
+            "[TestPlatform] Updating article: {} (id: {})",
+            article.name,
+            article.id,
         );
         Ok(())
     }

@@ -15,7 +15,19 @@
       <h3>Publishing in progress</h3>
       @for (record of publishingArticles(); track record.articleId + record.platformId) {
         <div class="publish-item">
-          <span>{{ getArticleName(record.articleId) }} → {{ record.platformId }}</span>
+          <span>{{ getArticleName(record.articleId) }} → {{ getPlatformName(record.platformId) }}</span>
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        </div>
+      }
+    </div>
+  }
+
+  @if (updatingArticles().length > 0) {
+    <div class="section">
+      <h3>Updating in progress</h3>
+      @for (record of updatingArticles(); track record.articleId + record.platformId) {
+        <div class="publish-item">
+          <span>{{ getArticleName(record.articleId) }} → {{ getPlatformName(record.platformId) }}</span>
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
         </div>
       }
@@ -30,7 +42,12 @@
           <div class="published-item">
             <mat-icon>check_circle</mat-icon>
             <span>{{ getArticleName(record.articleId) }}</span>
-            <span class="platform-badge">{{ record.platformId }}</span>
+            <span class="platform-badge">{{ getPlatformName(record.platformId) }}</span>
+            <span class="status-label">{{ getStatusLabel(record) }}</span>
+            <span class="spacer"></span>
+            <button mat-icon-button (click)="updateRecord(record)" matTooltip="Push update to platform">
+              <mat-icon>sync</mat-icon>
+            </button>
           </div>
         }
       </div>

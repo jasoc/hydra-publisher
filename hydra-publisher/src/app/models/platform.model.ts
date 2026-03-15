@@ -6,5 +6,12 @@ export interface PlatformInfo {
 export interface PublishRecord {
   articleId: string;
   platformId: string;
-  status: 'NotPublished' | 'Publishing' | 'Published' | { Failed: string };
+  status:
+    | 'NotPublished'
+    | 'Publishing'
+    | 'Published'
+    | 'Updating'
+    | 'Updated'
+    | { Failed: string }
+    | { UpdateFailed: string };
 }

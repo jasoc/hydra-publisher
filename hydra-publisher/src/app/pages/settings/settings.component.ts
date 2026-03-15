@@ -35,6 +35,7 @@ export class SettingsComponent implements OnInit {
   aiToken = '';
   aiModel = '';
   language = '';
+  ebayToken = '';
 
   languages = [
     { value: 'en', label: 'English' },
@@ -59,6 +60,7 @@ export class SettingsComponent implements OnInit {
       this.aiToken = settings.aiToken;
       this.aiModel = settings.aiModel;
       this.language = settings.language;
+      this.ebayToken = settings.ebayToken || '';
     } finally {
       this.loading.set(false);
     }
@@ -73,6 +75,7 @@ export class SettingsComponent implements OnInit {
       aiModel: this.aiModel,
       language: this.language,
       recentFolders: currentSettings?.recentFolders || [],
+      ebayToken: this.ebayToken,
     };
 
     try {
