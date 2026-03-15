@@ -5,4 +5,6 @@ export interface AiRequest {
   description: string;
   status: 'Pending' | 'InProgress' | 'Completed' | { Failed: string };
   photoCount: number;
+  prompt: string;
+  rawResponse: string;
 }

@@ -26,9 +26,11 @@ pub fn run() {
             commands::catalog::delete_article,
             commands::ai::start_ai_fill,
             commands::ai::get_ai_requests,
+            commands::ai::regenerate_article_fields,
             commands::publish::list_platforms,
             commands::publish::publish_articles,
             commands::publish::get_publish_records,
+            commands::publish::update_articles,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

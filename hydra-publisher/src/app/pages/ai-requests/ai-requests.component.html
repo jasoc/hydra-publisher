@@ -20,9 +20,28 @@
               <mat-icon [class]="getStatusClass(request)">{{ getStatusIcon(request) }}</mat-icon>
             }
             <span class="request-desc">{{ request.description }}</span>
+            <button mat-icon-button class="expand-btn" (click)="toggleExpanded(request.id)">
+              <mat-icon>{{ isExpanded(request.id) ? 'expand_less' : 'expand_more' }}</mat-icon>
+            </button>
           </div>
           @if (getErrorMessage(request)) {
             <div class="error-msg">{{ getErrorMessage(request) }}</div>
+          }
+          @if (isExpanded(request.id)) {
+            <div class="request-details">
+              @if (request.prompt) {
+                <div class="detail-section">
+                  <div class="detail-label">Prompt</div>
+                  <pre class="detail-content">{{ request.prompt }}</pre>
+                </div>
+              }
+              @if (request.rawResponse) {
+                <div class="detail-section">
+                  <div class="detail-label">Raw Response</div>
+                  <pre class="detail-content">{{ request.rawResponse }}</pre>
+                </div>
+              }
+            </div>
           }
         </div>
       </mat-list-item>

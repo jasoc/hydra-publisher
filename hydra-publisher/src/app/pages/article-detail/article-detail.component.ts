@@ -7,11 +7,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { PhotoGridComponent } from '../../shared/photo-grid/photo-grid.component';
 import { CatalogService } from '../../services/catalog.service';
 import { PhotoService } from '../../services/photo.service';
 import { Article } from '../../models/article.model';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 @Component({
   selector: 'app-article-detail',
@@ -24,6 +25,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
     MatButtonModule,
     MatIconModule,
     MatSnackBarModule,
+    MatTooltipModule,
     PhotoGridComponent,
   ],
   templateUrl: './article-detail.component.html',
@@ -108,6 +110,37 @@ export class ArticleDetailComponent implements OnInit {
       const result = await this.catalogService.updateArticle(updated);
       this.article.set(result);
       this.snackBar.open(`Added ${newFilenames.length} photos`, 'OK', { duration: 2000 });
+    } catch (err) {
+      this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
+    }
+  }
+
+  async regenerateFields(): Promise<void> {
+    const a = this.article();
+    if (!a) return;
+
+    try {
+      await invoke('regenerate_article_fields', {
+        articleId: a.id,
+        folderPath: a.folderPath,
+      });
+      this.snackBar.open('AI regeneration started. Check AI Requests page for progress.', 'OK', {
+        duration: 3000,
+      });
+      this.router.navigate(['/ai']);
+    } catch (err) {
+      this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
+    }
+  }
+
+  async deleteArticle(): Promise<void> {
+    const a = this.article();
+    if (!a) return;
+
+    try {
+      await this.catalogService.deleteArticle(a.folderPath);
+      this.snackBar.open(`Deleted "${a.name}"`, 'OK', { duration: 2000 });
+      this.router.navigate(['/catalog']);
     } catch (err) {
       this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
     }

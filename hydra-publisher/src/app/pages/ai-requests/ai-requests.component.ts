@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatButtonModule } from '@angular/material/button';
 import { AiService } from '../../services/ai.service';
 import { AiRequest } from '../../models/ai-request.model';
 
@@ -14,12 +15,14 @@ import { AiRequest } from '../../models/ai-request.model';
     MatListModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    MatButtonModule,
   ],
   templateUrl: './ai-requests.component.html',
   styleUrl: './ai-requests.component.scss',
 })
 export class AiRequestsComponent implements OnInit, OnDestroy {
   requests = signal<AiRequest[]>([]);
+  expandedIds = signal<Set<string>>(new Set());
 
   constructor(private aiService: AiService) {}
 
@@ -67,5 +70,19 @@ export class AiRequestsComponent implements OnInit, OnDestroy {
       return request.status.Failed;
     }
     return '';
+  }
+
+  toggleExpanded(id: string): void {
+    const current = new Set(this.expandedIds());
+    if (current.has(id)) {
+      current.delete(id);
+    } else {
+      current.add(id);
+    }
+    this.expandedIds.set(current);
+  }
+
+  isExpanded(id: string): boolean {
+    return this.expandedIds().has(id);
   }
 }

@@ -9,6 +9,8 @@ pub struct AiRequest {
     pub description: String,
     pub status: AiRequestStatus,
     pub photo_count: usize,
+    pub prompt: String,
+    pub raw_response: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
