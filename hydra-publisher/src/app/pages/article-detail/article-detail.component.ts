@@ -8,6 +8,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSelectModule } from '@angular/material/select';
 import { PhotoGridComponent } from '../../shared/photo-grid/photo-grid.component';
 import { CatalogService } from '../../services/catalog.service';
 import { PhotoService } from '../../services/photo.service';
@@ -26,6 +27,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
     MatIconModule,
     MatSnackBarModule,
     MatTooltipModule,
+    MatSelectModule,
     PhotoGridComponent,
   ],
   templateUrl: './article-detail.component.html',
@@ -39,6 +41,20 @@ export class ArticleDetailComponent implements OnInit {
   name = '';
   description = '';
   price: number | null = null;
+  category: string | null = null;
+  condition: string | null = null;
+
+  categories = [
+    'Casa e giardino',
+    'Intrattenimento',
+    'Abbigliamento e accessori',
+    'Famiglia',
+    'Elettronica',
+    'Hobby',
+    'Piccoli annunci',
+  ];
+
+  conditions = ['Usato', 'Come nuovo', 'Buono', 'Accettabile'];
 
   constructor(
     private route: ActivatedRoute,
@@ -57,6 +73,8 @@ export class ArticleDetailComponent implements OnInit {
       this.name = article.name;
       this.description = article.description;
       this.price = article.price;
+      this.category = article.category;
+      this.condition = article.condition;
     } finally {
       this.loading.set(false);
     }
@@ -83,6 +101,8 @@ export class ArticleDetailComponent implements OnInit {
       name: this.name,
       description: this.description,
       price: this.price,
+      category: this.category,
+      condition: this.condition,
     };
 
     try {

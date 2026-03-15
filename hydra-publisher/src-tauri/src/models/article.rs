@@ -10,6 +10,10 @@ pub struct Article {
     pub photos: Vec<String>,
     pub videos: Vec<String>,
     pub folder_path: String,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 /// Written to manifest.yaml inside each article folder
@@ -22,6 +26,10 @@ pub struct ArticleManifest {
     pub price: Option<f64>,
     pub photos: Vec<String>,
     pub videos: Vec<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 impl ArticleManifest {
@@ -34,6 +42,8 @@ impl ArticleManifest {
             price: None,
             photos,
             videos: Vec::new(),
+            category: None,
+            condition: None,
         }
     }
 
@@ -46,6 +56,8 @@ impl ArticleManifest {
             photos: self.photos.clone(),
             videos: self.videos.clone(),
             folder_path,
+            category: self.category.clone(),
+            condition: self.condition.clone(),
         }
     }
 }

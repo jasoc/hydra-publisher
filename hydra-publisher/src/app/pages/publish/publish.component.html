@@ -3,64 +3,89 @@
     <h2>Publish</h2>
     <span class="spacer"></span>
     @if (step() === 'idle') {
-      <button mat-raised-button color="primary" (click)="startSellFlow()" [disabled]="articles().length === 0">
+      <button mat-raised-button color="primary" (click)="startSellFlow()" [disabled]="articles().length === 0 || loading()">
         <mat-icon>sell</mat-icon>
         Sell
       </button>
     }
   </div>
 
-  @if (publishingArticles().length > 0) {
-    <div class="section">
-      <h3>Publishing in progress</h3>
-      @for (record of publishingArticles(); track record.articleId + record.platformId) {
-        <div class="publish-item">
-          <span>{{ getArticleName(record.articleId) }} → {{ getPlatformName(record.platformId) }}</span>
-          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-        </div>
-      }
-    </div>
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" style="margin-bottom: 16px"></mat-progress-bar>
   }
 
-  @if (updatingArticles().length > 0) {
-    <div class="section">
-      <h3>Updating in progress</h3>
-      @for (record of updatingArticles(); track record.articleId + record.platformId) {
-        <div class="publish-item">
-          <span>{{ getArticleName(record.articleId) }} → {{ getPlatformName(record.platformId) }}</span>
-          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-        </div>
-      }
-    </div>
-  }
+  <!-- ── Article groups accordion ── -->
+  @if (step() === 'idle') {
+    @if (articleGroups().length > 0) {
+      <div class="groups-list">
+        @for (group of articleGroups(); track group.articleId) {
+          <div class="article-group">
+            <div class="group-header" (click)="toggleExpand(group.articleId)">
+              <mat-icon class="expand-icon">{{ isExpanded(group.articleId) ? 'expand_less' : 'expand_more' }}</mat-icon>
+              <span class="article-name">{{ group.articleName }}</span>
+              <span class="spacer"></span>
+              @if (groupSummary(group).progress > 0) {
+                <span class="summary-chip chip-progress">
+                  <mat-icon>sync</mat-icon>{{ groupSummary(group).progress }}
+                </span>
+              }
+              @if (groupSummary(group).error > 0) {
+                <span class="summary-chip chip-error">
+                  <mat-icon>error</mat-icon>{{ groupSummary(group).error }}
+                </span>
+              }
+              @if (groupSummary(group).success > 0) {
+                <span class="summary-chip chip-success">
+                  <mat-icon>check_circle</mat-icon>{{ groupSummary(group).success }}
+                </span>
+              }
+            </div>
 
-  @if (publishedArticles().length > 0) {
-    <div class="section">
-      <h3>Published articles</h3>
-      <div class="published-list">
-        @for (record of publishedArticles(); track record.articleId + record.platformId) {
-          <div class="published-item">
-            <mat-icon>check_circle</mat-icon>
-            <span>{{ getArticleName(record.articleId) }}</span>
-            <span class="platform-badge">{{ getPlatformName(record.platformId) }}</span>
-            <span class="status-label">{{ getStatusLabel(record) }}</span>
-            <span class="spacer"></span>
-            <button mat-icon-button (click)="updateRecord(record)" matTooltip="Push update to platform">
-              <mat-icon>sync</mat-icon>
-            </button>
+            @if (isExpanded(group.articleId)) {
+              <div class="group-body">
+                @for (record of group.records; track record.platformId) {
+                  <div class="platform-row">
+                    <mat-icon [class]="statusClass(record.status)">{{ statusIcon(record.status) }}</mat-icon>
+                    <span class="platform-name">{{ getPlatformName(record.platformId) }}</span>
+                    <span class="status-text" [class]="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+                    <span class="spacer"></span>
+                    @if (isInProgress(record.status)) {
+                      <mat-progress-bar mode="indeterminate" class="row-progress"></mat-progress-bar>
+                    }
+                    <button
+                      mat-icon-button
+                      (click)="syncRecord(record)"
+                      matTooltip="Sync to platform"
+                      [disabled]="isInProgress(record.status)">
+                      <mat-icon>sync</mat-icon>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
           </div>
         }
       </div>
-    </div>
+    } @else if (!loading()) {
+      <div class="empty-state">
+        <mat-icon class="empty-icon">publish</mat-icon>
+        <h3>No published articles yet</h3>
+        <p>Click "Sell" to start publishing articles to platforms</p>
+      </div>
+    }
   }
 
+  <!-- ── Step 1: Select articles ── -->
   @if (step() === 'select-articles') {
     <div class="section flow-section">
       <h3>Step 1: Select articles to publish</h3>
       <div class="article-list">
         @for (article of articles(); track article.id) {
           <div class="selectable-item" (click)="toggleArticle(article.id)">
-            <mat-checkbox [checked]="isArticleSelected(article.id)" (click)="$event.stopPropagation()" (change)="toggleArticle(article.id)">
+            <mat-checkbox
+              [checked]="isArticleSelected(article.id)"
+              (click)="$event.stopPropagation()"
+              (change)="toggleArticle(article.id)">
             </mat-checkbox>
             <span>{{ article.name }}</span>
             <span class="photo-count">{{ article.photos.length }} photos</span>
@@ -76,6 +101,7 @@
     </div>
   }
 
+  <!-- ── Step 2: Platform matrix ── -->
   @if (step() === 'select-matrix') {
     <div class="section flow-section">
       <h3>Step 2: Select platforms for each article</h3>
@@ -117,18 +143,11 @@
     </div>
   }
 
+  <!-- ── Publishing in progress ── -->
   @if (step() === 'publishing') {
     <div class="section">
-      <h3>Publishing...</h3>
+      <h3>Publishing…</h3>
       <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-    </div>
-  }
-
-  @if (step() === 'idle' && publishedArticles().length === 0 && publishingArticles().length === 0) {
-    <div class="empty-state">
-      <mat-icon class="empty-icon">publish</mat-icon>
-      <h3>No published articles yet</h3>
-      <p>Click "Sell" to start publishing articles to platforms</p>
     </div>
   }
 </div>

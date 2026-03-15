@@ -6,4 +6,6 @@ export interface Article {
   photos: string[];
   videos: string[];
   folderPath: string;
+  category: string | null;
+  condition: string | null;
 }

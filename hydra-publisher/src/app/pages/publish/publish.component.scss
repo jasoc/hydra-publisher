@@ -17,6 +17,115 @@
   flex: 1;
 }
 
+// ── Accordion ────────────────────────────────────────────────────────────────
+
+.groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.article-group {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+}
+
+.expand-icon {
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.article-name {
+  font-weight: 500;
+}
+
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px 1px 4px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 20px;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+
+  &.chip-success {
+    background: rgba(129, 199, 132, 0.15);
+    color: #81c784;
+  }
+
+  &.chip-error {
+    background: rgba(229, 115, 115, 0.15);
+    color: #e57373;
+  }
+
+  &.chip-progress {
+    background: rgba(100, 181, 246, 0.15);
+    color: #64b5f6;
+  }
+}
+
+.group-body {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.platform-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.platform-name {
+  min-width: 130px;
+  font-size: 14px;
+}
+
+.status-text {
+  font-size: 13px;
+}
+
+.row-progress {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+// Status color classes (applied to both mat-icon and status-text)
+.status-success { color: #81c784; }
+.status-error   { color: #e57373; }
+.status-progress { color: #64b5f6; }
+.status-idle    { color: rgba(255, 255, 255, 0.35); }
+
+// ── Publish flow ─────────────────────────────────────────────────────────────
+
 .section {
   margin-bottom: 24px;
 
@@ -29,44 +138,6 @@
   background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
   padding: 16px;
-}
-
-.publish-item {
-  margin-bottom: 12px;
-
-  span {
-    display: block;
-    margin-bottom: 4px;
-  }
-}
-
-.published-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.published-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  mat-icon {
-    color: #81c784;
-  }
-}
-
-.platform-badge {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-}
-
-.status-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  font-style: italic;
 }
 
 .article-list {
@@ -124,6 +195,8 @@
   gap: 8px;
   margin-top: 16px;
 }
+
+// ── Empty state ───────────────────────────────────────────────────────────────
 
 .empty-state {
   display: flex;

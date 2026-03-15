@@ -3,6 +3,9 @@ mod models;
 mod state;
 
 use state::AppState;
+use tauri::Manager;
+use tauri_plugin_store::StoreExt;
+use crate::models::platform::PublishRecord;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,6 +15,19 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(AppState::default())
+        .setup(|app| {
+            // Restore publish records persisted from the previous session.
+            let store = app.store("publish_records.json")?;
+            if let Some(val) = store.get("records") {
+                if let Ok(records) = serde_json::from_value::<Vec<PublishRecord>>(val.clone()) {
+                    let state = app.state::<AppState>();
+                    if let Ok(mut guard) = state.publish_records.lock() {
+                        *guard = records;
+                    };
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::settings::get_settings,
             commands::settings::save_settings,

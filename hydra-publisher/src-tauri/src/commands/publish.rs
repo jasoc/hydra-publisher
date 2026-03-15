@@ -1,33 +1,75 @@
 use std::path::Path;
-use tauri::AppHandle;
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 use crate::models::article::ArticleManifest;
 use crate::models::platform::{PlatformInfo, Platform, PublishRecord, PublishStatus, TestPlatform};
 use crate::models::ebay_platform::EbayPlatform;
+use crate::models::python_platform::PythonPlatform;
+use crate::models::python_bridge::PythonBridge;
 use crate::models::settings::AppSettings;
 use crate::state::AppState;
 
-fn get_platforms(settings: &AppSettings) -> Vec<Box<dyn Platform>> {
+fn get_platforms(
+    settings: &AppSettings,
+    python_bridge: Arc<Mutex<Option<PythonBridge>>>,
+    python_dir: String,
+    app_data_dir: String,
+) -> Vec<Box<dyn Platform>> {
     vec![
         Box::new(TestPlatform),
         Box::new(EbayPlatform::new(
             settings.ebay_token.clone(),
             "EBAY_IT".to_string(),
         )),
+        Box::new(PythonPlatform::new(
+            "subito".to_string(),
+            "Subito.it".to_string(),
+            python_bridge.clone(),
+            python_dir.clone(),
+            app_data_dir.clone(),
+        )),
+        Box::new(PythonPlatform::new(
+            "local_test_selenium".to_string(),
+            "Local Test Selenium".to_string(),
+            python_bridge,
+            python_dir,
+            app_data_dir,
+        )),
     ]
 }
 
 #[tauri::command]
 pub fn list_platforms() -> Vec<PlatformInfo> {
-    // List all supported platforms; token configuration is checked at publish time
-    let dummy = AppSettings::default();
-    get_platforms(&dummy)
-        .iter()
-        .map(|p| PlatformInfo {
-            id: p.id().to_string(),
-            name: p.name().to_string(),
-        })
-        .collect()
+    vec![
+        PlatformInfo { id: "test".to_string(),                name: "Test Platform".to_string() },
+        PlatformInfo { id: "ebay".to_string(),                name: "eBay".to_string() },
+        PlatformInfo { id: "subito".to_string(),              name: "Subito.it".to_string() },
+        PlatformInfo { id: "local_test_selenium".to_string(), name: "Local Test Selenium".to_string() },
+    ]
+}
+
+fn resolve_python_dir(app: &AppHandle) -> String {
+    app.path()
+        .resource_dir()
+        .map(|p| p.join("python").to_string_lossy().to_string())
+        .unwrap_or_else(|_| "resources/python".to_string())
+}
+
+fn resolve_app_data_dir(app: &AppHandle) -> String {
+    app.path()
+        .app_data_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
+/// Persist the current publish records to the store.
+fn save_records(app: &AppHandle, state: &AppState) -> Result<(), String> {
+    let store = app.store("publish_records.json").map_err(|e| e.to_string())?;
+    let records = state.publish_records.lock().map_err(|e| e.to_string())?;
+    let value = serde_json::to_value(&*records).map_err(|e| e.to_string())?;
+    store.set("records", value);
+    store.save().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -44,7 +86,9 @@ pub async fn publish_articles(
     };
 
     let root = Path::new(&settings.catalog_root);
-    let platforms = get_platforms(&settings);
+    let python_dir = resolve_python_dir(&app);
+    let app_data_dir = resolve_app_data_dir(&app);
+    let platforms = get_platforms(&settings, state.python_bridge.clone(), python_dir, app_data_dir);
 
     let mut articles = Vec::new();
     if root.exists() {
@@ -89,8 +133,9 @@ pub async fn publish_articles(
             }
         }
     }
+    save_records(&app, &state)?;
 
-    // Publish (block_in_place allows blocking HTTP from async context)
+    // Publish
     for article in &articles {
         for pid in &platform_ids {
             if let Some(platform) = platforms.iter().find(|p| p.id() == pid) {
@@ -110,6 +155,7 @@ pub async fn publish_articles(
             }
         }
     }
+    save_records(&app, &state)?;
 
     Ok(())
 }
@@ -136,7 +182,9 @@ pub async fn update_articles(
     };
 
     let root = Path::new(&settings.catalog_root);
-    let platforms = get_platforms(&settings);
+    let python_dir = resolve_python_dir(&app);
+    let app_data_dir = resolve_app_data_dir(&app);
+    let platforms = get_platforms(&settings, state.python_bridge.clone(), python_dir, app_data_dir);
 
     let mut articles = Vec::new();
     if root.exists() {
@@ -173,8 +221,8 @@ pub async fn update_articles(
             }
         }
     }
+    save_records(&app, &state)?;
 
-    // Call update (block_in_place allows blocking HTTP from async context)
     for article in &articles {
         for pid in &platform_ids {
             if let Some(platform) = platforms.iter().find(|p| p.id() == pid) {
@@ -194,6 +242,7 @@ pub async fn update_articles(
             }
         }
     }
+    save_records(&app, &state)?;
 
     Ok(())
 }
