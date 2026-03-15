@@ -1,19 +1,33 @@
-<main class="container">
-  <h1>Welcome to Tauri + Angular!</h1>
-
-  <div class="row">
-    <a href="https://tauri.app" target="_blank">
-      <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-    </a>
-    <a href="https://angular.io" target="_blank">
-      <img src="/assets/angular.svg" class="logo angular" alt="Angular logo" />
-    </a>
-  </div>
-  <p>Click on the logos to learn more about the frameworks</p>
-
-  <form class="row" (submit)="greet($event, greetInput.value)">
-    <input #greetInput id="greet-input" placeholder="Enter a name..." />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{{ greetingMessage }}</p>
-</main>
+<mat-sidenav-container class="app-shell">
+  <mat-sidenav mode="side" opened class="sidebar">
+    <div class="sidebar-header">
+      <mat-icon class="app-icon">storefront</mat-icon>
+      <span class="app-title">Hydra</span>
+    </div>
+    <mat-nav-list>
+      <a mat-list-item routerLink="/import" routerLinkActive="active">
+        <mat-icon matListItemIcon>add_photo_alternate</mat-icon>
+        <span matListItemTitle>Import</span>
+      </a>
+      <a mat-list-item routerLink="/catalog" routerLinkActive="active">
+        <mat-icon matListItemIcon>inventory_2</mat-icon>
+        <span matListItemTitle>Catalog</span>
+      </a>
+      <a mat-list-item routerLink="/publish" routerLinkActive="active">
+        <mat-icon matListItemIcon>publish</mat-icon>
+        <span matListItemTitle>Publish</span>
+      </a>
+      <a mat-list-item routerLink="/ai" routerLinkActive="active">
+        <mat-icon matListItemIcon>auto_awesome</mat-icon>
+        <span matListItemTitle>AI</span>
+      </a>
+      <a mat-list-item routerLink="/settings" routerLinkActive="active">
+        <mat-icon matListItemIcon>settings</mat-icon>
+        <span matListItemTitle>Settings</span>
+      </a>
+    </mat-nav-list>
+  </mat-sidenav>
+  <mat-sidenav-content class="content">
+    <router-outlet />
+  </mat-sidenav-content>
+</mat-sidenav-container>

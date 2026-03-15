@@ -1,0 +1,55 @@
+<div class="import-page">
+  @if (recentFolders().length > 0) {
+    <div class="recent-folders">
+      <mat-chip-set>
+        @for (folder of recentFolders(); track folder) {
+          <mat-chip (click)="loadFromRecent(folder)">
+            <mat-icon matChipAvatar>folder</mat-icon>
+            {{ getFolderName(folder) }}
+          </mat-chip>
+        }
+      </mat-chip-set>
+    </div>
+  }
+
+  @if (photos().length === 0 && !loading()) {
+    <div class="empty-state">
+      <mat-icon class="empty-icon">add_photo_alternate</mat-icon>
+      <h2>Import Photos</h2>
+      <p>Select a folder to import photos from</p>
+      <button mat-raised-button color="primary" (click)="pickFolder()">
+        <mat-icon>folder_open</mat-icon>
+        Add from folder
+      </button>
+    </div>
+  }
+
+  @if (photos().length > 0) {
+    <div class="toolbar">
+      <button mat-button (click)="pickFolder()">
+        <mat-icon>folder_open</mat-icon>
+        Change folder
+      </button>
+      <span class="spacer"></span>
+      <span class="count">{{ selectedPhotos().length }} of {{ photos().length }} selected</span>
+      <button
+        mat-raised-button
+        color="primary"
+        [disabled]="selectedPhotos().length === 0 || loading()"
+        (click)="createArticle()">
+        <mat-icon>add_box</mat-icon>
+        New Article
+      </button>
+    </div>
+
+    <app-photo-grid
+      [photoPaths]="photos()"
+      [selectable]="true"
+      (selectedChange)="onSelectionChange($event)">
+    </app-photo-grid>
+  }
+
+  @if (loading()) {
+    <div class="loading">Loading...</div>
+  }
+</div>

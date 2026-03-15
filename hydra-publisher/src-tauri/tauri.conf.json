@@ -12,15 +12,20 @@
   "app": {
     "windows": [
       {
-        "title": "hydra-publisher",
-        "width": 800,
-        "height": 600
+        "title": "Hydra Publisher",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
+  "plugins": {},
   "bundle": {
     "active": true,
     "targets": "all",

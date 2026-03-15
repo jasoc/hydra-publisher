@@ -1,0 +1,63 @@
+@if (loading()) {
+  <div class="loading">Loading article...</div>
+}
+
+@if (article(); as a) {
+  <div class="detail-page">
+    <div class="toolbar">
+      <button mat-icon-button (click)="goBack()">
+        <mat-icon>arrow_back</mat-icon>
+      </button>
+      <h2>{{ a.name }}</h2>
+      <span class="spacer"></span>
+      <button mat-raised-button color="primary" (click)="save()">
+        <mat-icon>save</mat-icon>
+        Save
+      </button>
+    </div>
+
+    <div class="form-section">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Name</mat-label>
+        <input matInput [(ngModel)]="name" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Description</mat-label>
+        <textarea matInput [(ngModel)]="description" rows="4"></textarea>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Price (EUR)</mat-label>
+        <input matInput type="number" [(ngModel)]="price" min="0" step="0.01" />
+        <mat-icon matPrefix>euro</mat-icon>
+      </mat-form-field>
+    </div>
+
+    <div class="media-section">
+      <div class="section-header">
+        <h3>Photos ({{ a.photos.length }})</h3>
+        <button mat-button (click)="addPhotos()">
+          <mat-icon>add_photo_alternate</mat-icon>
+          Add Photos
+        </button>
+      </div>
+
+      <app-photo-grid
+        [photoPaths]="getPhotoPaths()"
+        [selectable]="false">
+      </app-photo-grid>
+    </div>
+
+    @if (a.videos.length > 0) {
+      <div class="media-section">
+        <h3>Videos ({{ a.videos.length }})</h3>
+        <div class="video-grid">
+          @for (video of a.videos; track video) {
+            <video [src]="getVideoUrl(video)" controls class="video-player"></video>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}

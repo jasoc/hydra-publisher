@@ -1,0 +1,46 @@
+<div class="catalog-page">
+  <div class="toolbar">
+    <h2>Catalog</h2>
+    <span class="spacer"></span>
+    <button mat-raised-button color="accent" (click)="askAiFill()" [disabled]="articles().length === 0">
+      <mat-icon>auto_awesome</mat-icon>
+      Ask AI to fill in blank fields
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="loading">Loading articles...</div>
+  }
+
+  @if (!loading() && articles().length === 0) {
+    <div class="empty-state">
+      <mat-icon class="empty-icon">inventory_2</mat-icon>
+      <h3>No articles yet</h3>
+      <p>Import photos and create articles from the Import page</p>
+    </div>
+  }
+
+  <div class="article-grid">
+    @for (article of articles(); track article.id) {
+      <mat-card class="article-card" (click)="openArticle(article)">
+        <div class="card-thumb">
+          @if (getThumbUrl(article)) {
+            <img [src]="getThumbUrl(article)" alt="" />
+          } @else {
+            <mat-icon class="no-thumb">image</mat-icon>
+          }
+          <span class="photo-count" [matBadge]="article.photos.length" matBadgeOverlap="false"></span>
+        </div>
+        <mat-card-content>
+          <div class="card-name">{{ article.name }}</div>
+          @if (article.description) {
+            <div class="card-desc">{{ article.description }}</div>
+          }
+          @if (article.price) {
+            <div class="card-price">{{ article.price | currency:'EUR' }}</div>
+          }
+        </mat-card-content>
+      </mat-card>
+    }
+  </div>
+</div>

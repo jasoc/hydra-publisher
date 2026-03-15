@@ -1,0 +1,24 @@
+<div class="grid">
+  @for (photo of photoPaths(); track photo) {
+    <div class="grid-item" [class.selected]="isSelected(photo)" (click)="togglePhoto(photo)">
+      @if (isVideo(photo)) {
+        <video [src]="getPhotoUrl(photo)" class="media"></video>
+        <div class="video-badge">VIDEO</div>
+      } @else {
+        <img [src]="getPhotoUrl(photo)" class="media" loading="lazy" />
+      }
+      @if (selectable()) {
+        <mat-checkbox
+          class="check"
+          [checked]="isSelected(photo)"
+          (click)="$event.stopPropagation()"
+          (change)="togglePhoto(photo)">
+        </mat-checkbox>
+      }
+    </div>
+  }
+</div>
+
+@if (photoPaths().length === 0) {
+  <div class="empty">No photos to display</div>
+}

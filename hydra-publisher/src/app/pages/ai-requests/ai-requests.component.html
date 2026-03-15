@@ -1,0 +1,31 @@
+<div class="ai-page">
+  <h2>AI Requests</h2>
+
+  @if (requests().length === 0) {
+    <div class="empty-state">
+      <mat-icon class="empty-icon">auto_awesome</mat-icon>
+      <h3>No AI requests</h3>
+      <p>Use "Ask AI to fill in blank fields" from the Catalog page to start</p>
+    </div>
+  }
+
+  <mat-list>
+    @for (request of requests(); track request.id) {
+      <mat-list-item class="request-item">
+        <div class="request-content">
+          <div class="request-header">
+            @if (isActive(request)) {
+              <mat-spinner diameter="20"></mat-spinner>
+            } @else {
+              <mat-icon [class]="getStatusClass(request)">{{ getStatusIcon(request) }}</mat-icon>
+            }
+            <span class="request-desc">{{ request.description }}</span>
+          </div>
+          @if (getErrorMessage(request)) {
+            <div class="error-msg">{{ getErrorMessage(request) }}</div>
+          }
+        </div>
+      </mat-list-item>
+    }
+  </mat-list>
+</div>

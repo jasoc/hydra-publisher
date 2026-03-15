@@ -1,0 +1,54 @@
+<div class="settings-page">
+  <div class="toolbar">
+    <h2>Settings</h2>
+    <span class="spacer"></span>
+    <button mat-raised-button color="primary" (click)="save()">
+      <mat-icon>save</mat-icon>
+      Save
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="loading">Loading settings...</div>
+  } @else {
+    <div class="form">
+      <h3>General</h3>
+
+      <div class="field-row">
+        <mat-form-field appearance="outline" class="field-grow">
+          <mat-label>Catalog Root Directory</mat-label>
+          <input matInput [(ngModel)]="catalogRoot" placeholder="/home/user" />
+        </mat-form-field>
+        <button mat-icon-button (click)="browseCatalogRoot()" matTooltip="Browse">
+          <mat-icon>folder_open</mat-icon>
+        </button>
+      </div>
+
+      <h3>AI Configuration</h3>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>AI API Host</mat-label>
+        <input matInput [(ngModel)]="aiHost" placeholder="https://openrouter.ai/api" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>AI API Token</mat-label>
+        <input matInput [(ngModel)]="aiToken" type="password" placeholder="sk-..." />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>AI Model</mat-label>
+        <input matInput [(ngModel)]="aiModel" placeholder="gpt-4o" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Description Language</mat-label>
+        <mat-select [(ngModel)]="language">
+          @for (lang of languages; track lang.value) {
+            <mat-option [value]="lang.value">{{ lang.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+  }
+</div>

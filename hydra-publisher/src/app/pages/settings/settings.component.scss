@@ -1,0 +1,55 @@
+.settings-page {
+  max-width: 600px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  h3 {
+    margin: 16px 0 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  h3:first-child {
+    margin-top: 0;
+  }
+}
+
+.full-width {
+  width: 100%;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-grow {
+  flex: 1;
+}
+
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: rgba(255, 255, 255, 0.5);
+}

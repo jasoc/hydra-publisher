@@ -1,0 +1,67 @@
+.ai-page {
+  h2 {
+    margin: 0 0 16px;
+  }
+}
+
+.request-item {
+  height: auto !important;
+  padding: 12px 0 !important;
+}
+
+.request-content {
+  width: 100%;
+}
+
+.request-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.request-desc {
+  font-size: 14px;
+}
+
+.status-done {
+  color: #81c784;
+}
+
+.status-active {
+  color: #64b5f6;
+}
+
+.status-error {
+  color: #ef5350;
+}
+
+.error-msg {
+  margin-top: 4px;
+  margin-left: 32px;
+  font-size: 12px;
+  color: #ef5350;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px;
+  color: rgba(255, 255, 255, 0.5);
+
+  h3 {
+    margin: 8px 0 4px;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.empty-icon {
+  font-size: 64px;
+  width: 64px;
+  height: 64px;
+  color: rgba(255, 255, 255, 0.2);
+}

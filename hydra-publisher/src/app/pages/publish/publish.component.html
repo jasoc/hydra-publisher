@@ -1,0 +1,117 @@
+<div class="publish-page">
+  <div class="toolbar">
+    <h2>Publish</h2>
+    <span class="spacer"></span>
+    @if (step() === 'idle') {
+      <button mat-raised-button color="primary" (click)="startSellFlow()" [disabled]="articles().length === 0">
+        <mat-icon>sell</mat-icon>
+        Sell
+      </button>
+    }
+  </div>
+
+  @if (publishingArticles().length > 0) {
+    <div class="section">
+      <h3>Publishing in progress</h3>
+      @for (record of publishingArticles(); track record.articleId + record.platformId) {
+        <div class="publish-item">
+          <span>{{ getArticleName(record.articleId) }} → {{ record.platformId }}</span>
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        </div>
+      }
+    </div>
+  }
+
+  @if (publishedArticles().length > 0) {
+    <div class="section">
+      <h3>Published articles</h3>
+      <div class="published-list">
+        @for (record of publishedArticles(); track record.articleId + record.platformId) {
+          <div class="published-item">
+            <mat-icon>check_circle</mat-icon>
+            <span>{{ getArticleName(record.articleId) }}</span>
+            <span class="platform-badge">{{ record.platformId }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  @if (step() === 'select-articles') {
+    <div class="section flow-section">
+      <h3>Step 1: Select articles to publish</h3>
+      <div class="article-list">
+        @for (article of articles(); track article.id) {
+          <div class="selectable-item" (click)="toggleArticle(article.id)">
+            <mat-checkbox [checked]="isArticleSelected(article.id)" (click)="$event.stopPropagation()" (change)="toggleArticle(article.id)">
+            </mat-checkbox>
+            <span>{{ article.name }}</span>
+            <span class="photo-count">{{ article.photos.length }} photos</span>
+          </div>
+        }
+      </div>
+      <div class="flow-actions">
+        <button mat-button (click)="cancelFlow()">Cancel</button>
+        <button mat-raised-button color="primary" (click)="goToMatrix()" [disabled]="selectedArticleIds().size === 0">
+          Next
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (step() === 'select-matrix') {
+    <div class="section flow-section">
+      <h3>Step 2: Select platforms for each article</h3>
+      <div class="matrix">
+        <table>
+          <thead>
+            <tr>
+              <th>Article</th>
+              @for (platform of platforms(); track platform.id) {
+                <th>{{ platform.name }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (articleId of selectedArticleIds(); track articleId) {
+              <tr>
+                <td>{{ getArticleName(articleId) }}</td>
+                @for (platform of platforms(); track platform.id) {
+                  <td class="matrix-cell">
+                    <mat-checkbox
+                      [checked]="isMatrixChecked(articleId, platform.id) || isMatrixDisabled(articleId, platform.id)"
+                      [disabled]="isMatrixDisabled(articleId, platform.id)"
+                      (change)="toggleMatrix(articleId, platform.id)">
+                    </mat-checkbox>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="flow-actions">
+        <button mat-button (click)="step.set('select-articles')">Back</button>
+        <button mat-raised-button color="primary" (click)="executePublish()">
+          <mat-icon>publish</mat-icon>
+          Publish
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (step() === 'publishing') {
+    <div class="section">
+      <h3>Publishing...</h3>
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    </div>
+  }
+
+  @if (step() === 'idle' && publishedArticles().length === 0 && publishingArticles().length === 0) {
+    <div class="empty-state">
+      <mat-icon class="empty-icon">publish</mat-icon>
+      <h3>No published articles yet</h3>
+      <p>Click "Sell" to start publishing articles to platforms</p>
+    </div>
+  }
+</div>

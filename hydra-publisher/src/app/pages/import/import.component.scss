@@ -1,0 +1,57 @@
+.import-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.recent-folders {
+  margin-bottom: 16px;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.7);
+
+  h2 {
+    margin: 0;
+  }
+
+  p {
+    margin: 0 0 16px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+.empty-icon {
+  font-size: 64px;
+  width: 64px;
+  height: 64px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.count {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+}
+
+.loading {
+  text-align: center;
+  padding: 24px;
+  color: rgba(255, 255, 255, 0.5);
+}
