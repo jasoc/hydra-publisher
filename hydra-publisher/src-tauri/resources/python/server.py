@@ -59,7 +59,7 @@ def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
     if provider_id in _selenium_sessions:
         return _selenium_sessions[provider_id]
 
-    from selenium import webdriver
+    froselenium import webdriver
     from selenium.webdriver.chrome.options import Options
 
     options = Options()

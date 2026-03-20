@@ -57,6 +57,87 @@
         <input matInput [(ngModel)]="ebayToken" type="password" placeholder="v^1.1#i^1#f^..." />
         <mat-hint>User token with sell.inventory scope</mat-hint>
       </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Marketplace</mat-label>
+        <mat-select [(ngModel)]="ebayMarketplaceId">
+          @for (m of ebayMarketplaces; track m.value) {
+            <mat-option [value]="m.value">{{ m.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <div class="field-row">
+        <mat-form-field appearance="outline" class="field-grow">
+          <mat-label>Fulfillment Policy ID</mat-label>
+          <input matInput [(ngModel)]="ebayFulfillmentPolicyId" placeholder="shipping policy ID from Seller Hub" />
+          <mat-hint>Seller Hub → Account → Business Policies → Shipping</mat-hint>
+        </mat-form-field>
+      </div>
+
+      <div class="field-row">
+        <mat-form-field appearance="outline" class="field-grow">
+          <mat-label>Payment Policy ID</mat-label>
+          <input matInput [(ngModel)]="ebayPaymentPolicyId" placeholder="payment policy ID from Seller Hub" />
+          <mat-hint>Seller Hub → Account → Business Policies → Payment</mat-hint>
+        </mat-form-field>
+      </div>
+
+      <div class="field-row">
+        <mat-form-field appearance="outline" class="field-grow">
+          <mat-label>Return Policy ID</mat-label>
+          <input matInput [(ngModel)]="ebayReturnPolicyId" placeholder="return policy ID from Seller Hub" />
+          <mat-hint>Seller Hub → Account → Business Policies → Returns</mat-hint>
+        </mat-form-field>
+        <button
+          mat-raised-button
+          color="accent"
+          (click)="fetchEbayPolicies()"
+          [disabled]="loadingPolicies()"
+          matTooltip="Auto-fetch policy IDs from eBay using the token above"
+        >
+          <mat-icon>download</mat-icon>
+          {{ loadingPolicies() ? 'Fetching...' : 'Auto-fetch' }}
+        </button>
+      </div>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Default Category ID</mat-label>
+        <input matInput [(ngModel)]="ebayCategoryId" placeholder="e.g. 175751" />
+        <mat-hint>Leaf category ID — use the search below to find it</mat-hint>
+      </mat-form-field>
+
+      <div class="field-row">
+        <mat-form-field appearance="outline" class="field-grow">
+          <mat-label>Search eBay Categories</mat-label>
+          <input
+            matInput
+            [(ngModel)]="categorySearchQuery"
+            placeholder="e.g. comodino, chitarra, scarpe..."
+            (keyup.enter)="searchEbayCategories()"
+          />
+        </mat-form-field>
+        <button
+          mat-raised-button
+          color="accent"
+          (click)="searchEbayCategories()"
+          [disabled]="searchingCategories() || !ebayToken"
+        >
+          <mat-icon>search</mat-icon>
+          {{ searchingCategories() ? 'Searching...' : 'Search' }}
+        </button>
+      </div>
+
+      @if (categorySearchResults.length > 0) {
+        <div class="category-results">
+          @for (cat of categorySearchResults; track cat.categoryId) {
+            <button mat-button class="category-result-item" (click)="selectCategory(cat)">
+              <span class="category-path">{{ cat.categoryPath }}</span>
+              <span class="category-id">#{{ cat.categoryId }}</span>
+            </button>
+          }
+        </div>
+      }
     </div>
   }
 </div>

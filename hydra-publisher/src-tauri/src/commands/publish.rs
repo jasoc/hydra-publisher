@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
+use reqwest::header::AUTHORIZATION;
 use crate::models::article::ArticleManifest;
 use crate::models::platform::{PlatformInfo, Platform, PublishRecord, PublishStatus, TestPlatform};
 use crate::models::ebay_platform::EbayPlatform;
@@ -20,7 +21,15 @@ fn get_platforms(
         Box::new(TestPlatform),
         Box::new(EbayPlatform::new(
             settings.ebay_token.clone(),
-            "EBAY_IT".to_string(),
+            if settings.ebay_marketplace_id.is_empty() {
+                "EBAY_IT".to_string()
+            } else {
+                settings.ebay_marketplace_id.clone()
+            },
+            settings.ebay_fulfillment_policy_id.clone(),
+            settings.ebay_payment_policy_id.clone(),
+            settings.ebay_return_policy_id.clone(),
+            settings.ebay_category_id.clone(),
         )),
         Box::new(PythonPlatform::new(
             "subito".to_string(),
@@ -166,6 +175,98 @@ pub async fn get_publish_records(
 ) -> Result<Vec<PublishRecord>, String> {
     let records = state.publish_records.lock().map_err(|e| e.to_string())?;
     Ok(records.clone())
+}
+
+/// Deletes the eBay offer for a given article SKU and removes the publish record.
+/// This allows the user to reset a stuck/broken offer and republish from scratch.
+#[tauri::command]
+pub async fn delete_ebay_offer(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+    article_id: String,
+) -> Result<String, String> {
+    let store = app.store("settings.json").map_err(|e| e.to_string())?;
+    let settings: AppSettings = match store.get("settings") {
+        Some(v) => serde_json::from_value(v.clone()).map_err(|e| e.to_string())?,
+        None => AppSettings::default(),
+    };
+
+    if settings.ebay_token.is_empty() {
+        return Err("eBay token not configured".to_string());
+    }
+
+    let token = settings.ebay_token.clone();
+    let auth = format!("Bearer {}", token);
+    let client = reqwest::Client::new();
+
+    // 1. Find the offerId for this SKU
+    let find_url = format!(
+        "https://api.ebay.com/sell/inventory/v1/offer?sku={}",
+        urlencoding::encode(&article_id)
+    );
+    let resp = client
+        .get(&find_url)
+        .header(AUTHORIZATION, &auth)
+        .send()
+        .await
+        .map_err(|e| format!("Find offer failed: {}", e))?;
+
+    let status = resp.status();
+    if !status.is_success() && status.as_u16() != 404 {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Find offer error (HTTP {}): {}", status, body));
+    }
+
+    let offer_id = if status.is_success() {
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Parse error: {}", e))?;
+        json["offers"]
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|o| o["offerId"].as_str())
+            .map(|s| s.to_string())
+    } else {
+        None
+    };
+
+    // 2. Delete the offer if it exists
+    let deleted_offer = if let Some(ref oid) = offer_id {
+        let del_url = format!("https://api.ebay.com/sell/inventory/v1/offer/{}", oid);
+        let del_resp = client
+            .delete(&del_url)
+            .header(AUTHORIZATION, &auth)
+            .send()
+            .await
+            .map_err(|e| format!("Delete offer request failed: {}", e))?;
+
+        let del_status = del_resp.status();
+        if del_status.is_success() || del_status.as_u16() == 204 {
+            println!("[eBay] Offer '{}' deleted OK", oid);
+            true
+        } else {
+            let body = del_resp.text().await.unwrap_or_default();
+            return Err(format!("Delete offer failed (HTTP {}): {}", del_status, body));
+        }
+    } else {
+        println!("[eBay] No offer found for SKU '{}' — nothing to delete", article_id);
+        false
+    };
+
+    // 3. Remove the publish record from state
+    {
+        let mut records = state.publish_records.lock().map_err(|e| e.to_string())?;
+        records.retain(|r| !(r.article_id == article_id && r.platform_id == "ebay"));
+    }
+    save_records(&app, &state)?;
+
+    let msg = if deleted_offer {
+        format!("eBay offer '{}' deleted and record reset. You can now republish.", offer_id.unwrap_or_default())
+    } else {
+        "No eBay offer found — record reset. You can now republish.".to_string()
+    };
+    Ok(msg)
 }
 
 #[tauri::command]

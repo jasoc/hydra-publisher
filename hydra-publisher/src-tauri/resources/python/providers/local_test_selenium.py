@@ -67,10 +67,10 @@ class LocalTestSeleniumProvider(SeleniumProvider):
         print(f"[LocalTestSelenium] Publishing article: {article.get('name')} (id={article.get('id')})")
 
         # Navigate to the target page (replace with the real "new listing" URL)
-        driver.get("https://example.com")
+        driver.get("https://www.facebook.com/marketplace/create/item")
 
         # Example: locate a form field and fill it in
-        # title_field = driver.find_element(By.ID, "listing-title")
+        title_field = driver.find_element(By.ID, "_r_j3_")
         # title_field.clear()
         # title_field.send_keys(article["name"])
 

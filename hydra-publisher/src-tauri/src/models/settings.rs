@@ -11,6 +11,16 @@ pub struct AppSettings {
     pub recent_folders: Vec<String>,
     #[serde(default)]
     pub ebay_token: String,
+    #[serde(default)]
+    pub ebay_marketplace_id: String,
+    #[serde(default)]
+    pub ebay_fulfillment_policy_id: String,
+    #[serde(default)]
+    pub ebay_payment_policy_id: String,
+    #[serde(default)]
+    pub ebay_return_policy_id: String,
+    #[serde(default)]
+    pub ebay_category_id: String,
 }
 
 impl Default for AppSettings {
@@ -33,6 +43,11 @@ impl Default for AppSettings {
             language: "en".to_string(),
             recent_folders: Vec::new(),
             ebay_token: String::new(),
+            ebay_marketplace_id: "EBAY_IT".to_string(),
+            ebay_fulfillment_policy_id: String::new(),
+            ebay_payment_policy_id: String::new(),
+            ebay_return_policy_id: String::new(),
+            ebay_category_id: String::new(),
         }
     }
 }

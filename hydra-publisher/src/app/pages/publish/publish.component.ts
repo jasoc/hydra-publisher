@@ -10,6 +10,7 @@ import { CatalogService } from '../../services/catalog.service';
 import { PublishService } from '../../services/publish.service';
 import { Article } from '../../models/article.model';
 import { PlatformInfo, PublishRecord } from '../../models/platform.model';
+import { invoke } from '@tauri-apps/api/core';
 
 interface ArticleGroup {
   articleId: string;
@@ -244,6 +245,33 @@ export class PublishComponent implements OnInit {
       this.snackBar.open('Sync complete!', 'OK', { duration: 2000 });
     } catch (err) {
       this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
+    }
+  }
+
+  async deleteAndRetry(record: PublishRecord): Promise<void> {
+    const confirmed = window.confirm(
+      `Delete the eBay offer for "${this.getArticleName(record.articleId)}" and retry?\n\n` +
+      `This will remove the broken offer from eBay and reset the record so you can republish.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const msg = await invoke<string>('delete_ebay_offer', { articleId: record.articleId });
+      this.snackBar.open(msg, 'OK', { duration: 4000 });
+      await this.publishService.refreshRecords();
+      this.records.set(this.publishService.records());
+    } catch (err) {
+      this.snackBar.open(`Delete failed: ${err}`, 'OK', { duration: 6000 });
+      return;
+    }
+
+    // Automatically retry publish
+    try {
+      await this.publishService.publish([record.articleId], [record.platformId]);
+      this.records.set(this.publishService.records());
+      this.snackBar.open('Republished successfully!', 'OK', { duration: 3000 });
+    } catch (err) {
+      this.snackBar.open(`Retry failed: ${err}`, 'OK', { duration: 5000 });
     }
   }
 }

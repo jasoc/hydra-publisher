@@ -16,6 +16,39 @@
   flex: 1;
 }
 
+.category-results {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.category-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: normal;
+
+  &:last-child { border-bottom: none; }
+
+  .category-path { flex: 1; }
+
+  .category-id {
+    margin-left: 12px;
+    font-size: 11px;
+    opacity: 0.55;
+    flex-shrink: 0;
+  }
+}
+
 .form {
   display: flex;
   flex-direction: column;

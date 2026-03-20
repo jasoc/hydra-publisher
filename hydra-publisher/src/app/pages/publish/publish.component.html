@@ -59,6 +59,15 @@
                       [disabled]="isInProgress(record.status)">
                       <mat-icon>sync</mat-icon>
                     </button>
+                    @if (isError(record.status) && record.platformId === 'ebay') {
+                      <button
+                        mat-icon-button
+                        color="warn"
+                        (click)="deleteAndRetry(record)"
+                        matTooltip="Delete eBay offer and retry">
+                        <mat-icon>restart_alt</mat-icon>
+                      </button>
+                    }
                   </div>
                 }
               </div>

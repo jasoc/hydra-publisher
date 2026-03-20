@@ -6,4 +6,9 @@ export interface AppSettings {
   language: string;
   recentFolders: string[];
   ebayToken: string;
+  ebayMarketplaceId: string;
+  ebayFulfillmentPolicyId: string;
+  ebayPaymentPolicyId: string;
+  ebayReturnPolicyId: string;
+  ebayCategoryId: string;
 }
