@@ -45,16 +45,48 @@ export class ArticleDetailComponent implements OnInit {
   condition: string | null = null;
 
   categories = [
-    'Casa e giardino',
-    'Intrattenimento',
-    'Abbigliamento e accessori',
-    'Famiglia',
-    'Elettronica',
-    'Hobby',
-    'Piccoli annunci',
+    // Casa e giardino
+    'Attrezzi',
+    'Arredamento',
+    'Articoli per la casa',
+    'Giardino',
+    'Elettrodomestici',
+    // Intrattenimento
+    'Videogiochi',
+    'Libri, film e musica',
+    // Abbigliamento e accessori
+    'Borse e valigie',
+    'Abbigliamento e scarpe da donna',
+    'Abbigliamento e scarpe da uomo',
+    'Gioielli e accessori',
+    // Famiglia
+    'Salute e bellezza',
+    'Articoli per animali',
+    'Neonati e bambini',
+    'Giocattoli e videogiochi',
+    // Elettronica
+    'Elettronica e computer',
+    'Cellulari',
+    // Hobby
+    'Biciclette',
+    'Arte e artigianato',
+    'Sport e attività all\'aperto',
+    'Ricambi auto',
+    'Strumenti musicali',
+    'Articoli d\'antiquariato e da collezione',
+    // Piccoli annunci
+    'Mercatino dell\'usato',
+    'Varie',
+    // Veicoli
+    'Veicoli',
   ];
 
-  conditions = ['Usato', 'Come nuovo', 'Buono', 'Accettabile'];
+  conditions = [
+    'Nuovo',
+    'Usato - Come nuovo',
+    'Usato - Buono',
+    'Usato - Accettabile',
+  ];
 
   constructor(
     private route: ActivatedRoute,

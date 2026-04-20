@@ -86,3 +86,16 @@
   padding: 48px;
   color: rgba(255, 255, 255, 0.5);
 }
+
+.section-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.platforms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}

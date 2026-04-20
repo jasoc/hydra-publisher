@@ -1,0 +1,32 @@
+# vinted.yaml — selettori Selenium per vinted.it
+#
+# Modifica solo questo file quando il sito cambia DOM.
+# Priorità selettori: data-testid > aria-label > name > testo visibile > css class
+
+publish_url: "https://www.vinted.it/items/new"
+
+fields:
+  - id: photos
+    article_key: photos
+    type: file
+    xpath: '//input[@type="file"]'
+
+  - id: title
+    article_key: name
+    type: text
+    xpath: '//input[@data-testid="item-upload-title"] | //input[@name="title"] | //input[@aria-label="Titolo"]'
+
+  - id: description
+    article_key: description
+    type: textarea
+    xpath: '//textarea[@data-testid="item-upload-description"] | //textarea[@name="description"] | //textarea[@aria-label="Descrizione"]'
+
+  - id: price
+    article_key: price
+    type: text
+    xpath: '//input[@data-testid="item-upload-price"] | //input[@name="price"] | //input[@aria-label="Prezzo"]'
+
+buttons:
+  - id: submit
+    xpath: '//button[@data-testid="item-upload-submit"] | //button[contains(.,"Carica") and @type="submit"] | //button[contains(.,"Pubblica") and @type="submit"]'
+    wait_after: 2

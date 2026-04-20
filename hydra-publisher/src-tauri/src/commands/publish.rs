@@ -1,8 +1,10 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::collections::{HashMap, HashSet};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 use reqwest::header::AUTHORIZATION;
+use serde::Deserialize;
 use crate::models::article::ArticleManifest;
 use crate::models::platform::{PlatformInfo, Platform, PublishRecord, PublishStatus, TestPlatform};
 use crate::models::ebay_platform::EbayPlatform;
@@ -41,6 +43,20 @@ fn get_platforms(
         Box::new(PythonPlatform::new(
             "local_test_selenium".to_string(),
             "Local Test Selenium".to_string(),
+            python_bridge.clone(),
+            python_dir.clone(),
+            app_data_dir.clone(),
+        )),
+        Box::new(PythonPlatform::new(
+            "facebook_marketplace".to_string(),
+            "Facebook Marketplace".to_string(),
+            python_bridge.clone(),
+            python_dir.clone(),
+            app_data_dir.clone(),
+        )),
+        Box::new(PythonPlatform::new(
+            "vinted".to_string(),
+            "Vinted".to_string(),
             python_bridge,
             python_dir,
             app_data_dir,
@@ -51,10 +67,12 @@ fn get_platforms(
 #[tauri::command]
 pub fn list_platforms() -> Vec<PlatformInfo> {
     vec![
-        PlatformInfo { id: "test".to_string(),                name: "Test Platform".to_string() },
-        PlatformInfo { id: "ebay".to_string(),                name: "eBay".to_string() },
-        PlatformInfo { id: "subito".to_string(),              name: "Subito.it".to_string() },
-        PlatformInfo { id: "local_test_selenium".to_string(), name: "Local Test Selenium".to_string() },
+        PlatformInfo { id: "test".to_string(),                name: "Test Platform".to_string(),          supports_update: true },
+        PlatformInfo { id: "ebay".to_string(),                name: "eBay".to_string(),                   supports_update: true },
+        PlatformInfo { id: "subito".to_string(),              name: "Subito.it".to_string(),              supports_update: true },
+        PlatformInfo { id: "local_test_selenium".to_string(), name: "Local Test Selenium".to_string(),    supports_update: true },
+        PlatformInfo { id: "facebook_marketplace".to_string(), name: "Facebook Marketplace".to_string(),  supports_update: false },
+        PlatformInfo { id: "vinted".to_string(),               name: "Vinted".to_string(),                supports_update: false },
     ]
 }
 
@@ -81,13 +99,55 @@ fn save_records(app: &AppHandle, state: &AppState) -> Result<(), String> {
     store.save().map_err(|e| e.to_string())
 }
 
+/// Ensure the Python bridge is running and return a reference to it.
+fn ensure_bridge(
+    state: &AppState,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let python_dir = resolve_python_dir(app);
+    let app_data_dir = resolve_app_data_dir(app);
+    let mut guard = state.python_bridge.lock().map_err(|e| format!("Mutex poisoned: {e}"))?;
+    if guard.is_none() {
+        *guard = Some(PythonBridge::start(&python_dir, &app_data_dir)?);
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishTargetInput {
+    pub article_id: String,
+    pub platform_id: String,
+}
+
+#[tauri::command]
+pub async fn open_provider_session(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+    provider_id: String,
+) -> Result<serde_json::Value, String> {
+    ensure_bridge(&state, &app)?;
+    let body = serde_json::json!({});
+    let bridge = state.python_bridge.clone();
+    tokio::task::block_in_place(move || {
+        let guard = bridge.lock().map_err(|e| format!("Mutex poisoned: {e}"))?;
+        guard
+            .as_ref()
+            .expect("bridge was just started")
+            .call_json(&provider_id, "login", &body)
+    })
+}
+
 #[tauri::command]
 pub async fn publish_articles(
     state: tauri::State<'_, AppState>,
     app: AppHandle,
-    article_ids: Vec<String>,
-    platform_ids: Vec<String>,
+    targets: Vec<PublishTargetInput>,
 ) -> Result<(), String> {
+    if targets.is_empty() {
+        return Err("No publish targets provided".to_string());
+    }
+
     let store = app.store("settings.json").map_err(|e| e.to_string())?;
     let settings: AppSettings = match store.get("settings") {
         Some(value) => serde_json::from_value(value.clone()).map_err(|e| e.to_string())?,
@@ -98,6 +158,7 @@ pub async fn publish_articles(
     let python_dir = resolve_python_dir(&app);
     let app_data_dir = resolve_app_data_dir(&app);
     let platforms = get_platforms(&settings, state.python_bridge.clone(), python_dir, app_data_dir);
+    let article_id_set: HashSet<String> = targets.iter().map(|t| t.article_id.clone()).collect();
 
     let mut articles = Vec::new();
     if root.exists() {
@@ -112,56 +173,56 @@ pub async fn publish_articles(
                         std::fs::read_to_string(&manifest_path).map_err(|e| e.to_string())?;
                     let manifest: ArticleManifest =
                         serde_yaml::from_str(&content).map_err(|e| e.to_string())?;
-                    if article_ids.contains(&manifest.id) {
+                    if article_id_set.contains(&manifest.id) {
                         articles.push(manifest.to_article(path.to_string_lossy().to_string()));
                     }
                 }
             }
         }
     }
+    let articles_by_id: HashMap<String, crate::models::article::Article> = articles
+        .into_iter()
+        .map(|a| (a.id.clone(), a))
+        .collect();
 
-    // Mark as publishing
+    // Mark all targets as publishing
     {
         let mut records = state.publish_records.lock().map_err(|e| e.to_string())?;
-        for article in &articles {
-            for pid in &platform_ids {
-                let already = records.iter().any(|r| {
-                    r.article_id == article.id
-                        && r.platform_id == *pid
-                        && r.status == PublishStatus::Published
-                });
-                if already {
-                    continue;
-                }
-                records.retain(|r| !(r.article_id == article.id && r.platform_id == *pid));
-                records.push(PublishRecord {
-                    article_id: article.id.clone(),
-                    platform_id: pid.clone(),
-                    status: PublishStatus::Publishing,
-                });
-            }
+        for target in &targets {
+            records.retain(|r| {
+                !(r.article_id == target.article_id && r.platform_id == target.platform_id)
+            });
+            records.push(PublishRecord {
+                article_id: target.article_id.clone(),
+                platform_id: target.platform_id.clone(),
+                status: PublishStatus::Publishing,
+            });
         }
     }
     save_records(&app, &state)?;
 
-    // Publish
-    for article in &articles {
-        for pid in &platform_ids {
-            if let Some(platform) = platforms.iter().find(|p| p.id() == pid) {
-                let result = tokio::task::block_in_place(|| platform.publish(article));
-
-                let mut records = state.publish_records.lock().map_err(|e| e.to_string())?;
-                if let Some(record) = records.iter_mut().find(|r| {
-                    r.article_id == article.id
-                        && r.platform_id == *pid
-                        && r.status == PublishStatus::Publishing
-                }) {
-                    record.status = match result {
-                        Ok(()) => PublishStatus::Published,
-                        Err(e) => PublishStatus::Failed(e),
-                    };
-                }
+    // Publish each selected pair
+    for target in &targets {
+        let result = if let Some(article) = articles_by_id.get(&target.article_id) {
+            if let Some(platform) = platforms.iter().find(|p| p.id() == target.platform_id) {
+                tokio::task::block_in_place(|| platform.publish(article))
+            } else {
+                Err(format!("Unknown platform '{}'", target.platform_id))
             }
+        } else {
+            Err(format!("Article '{}' not found in catalog", target.article_id))
+        };
+
+        let mut records = state.publish_records.lock().map_err(|e| e.to_string())?;
+        if let Some(record) = records.iter_mut().find(|r| {
+            r.article_id == target.article_id
+                && r.platform_id == target.platform_id
+                && r.status == PublishStatus::Publishing
+        }) {
+            record.status = match result {
+                Ok(()) => PublishStatus::Published,
+                Err(e) => PublishStatus::Failed(e),
+            };
         }
     }
     save_records(&app, &state)?;
@@ -267,6 +328,90 @@ pub async fn delete_ebay_offer(
         "No eBay offer found — record reset. You can now republish.".to_string()
     };
     Ok(msg)
+}
+
+/// Force-reset a stuck task (Publishing / Updating / AwaitingLogin) to Failed.
+/// Lets the user unblock a record that will never complete on its own.
+#[tauri::command]
+pub async fn force_reset_task(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+    article_id: String,
+    platform_id: String,
+) -> Result<(), String> {
+    let mut records = state.publish_records.lock().map_err(|e| e.to_string())?;
+    if let Some(record) = records.iter_mut().find(|r| {
+        r.article_id == article_id && r.platform_id == platform_id
+    }) {
+        match &record.status {
+            PublishStatus::Publishing
+            | PublishStatus::Updating
+            | PublishStatus::AwaitingLogin => {
+                record.status = PublishStatus::Failed("Force reset by user".to_string());
+            }
+            _ => {}
+        }
+    }
+    drop(records);
+    save_records(&app, &state)
+}
+
+/// Return the list of provider IDs that currently have an active Selenium session.
+#[tauri::command]
+pub async fn get_active_sessions(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Vec<String>, String> {
+    ensure_bridge(&state, &app)?;
+    let bridge = state.python_bridge.clone();
+    tokio::task::block_in_place(move || {
+        let guard = bridge.lock().map_err(|e| format!("Mutex poisoned: {e}"))?;
+        guard.as_ref().expect("bridge was just started").get_sessions()
+    })
+}
+
+/// Kill the Selenium browser session for `provider_id`.
+#[tauri::command]
+pub async fn kill_session(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+    provider_id: String,
+) -> Result<(), String> {
+    ensure_bridge(&state, &app)?;
+    let bridge = state.python_bridge.clone();
+    tokio::task::block_in_place(move || {
+        let guard = bridge.lock().map_err(|e| format!("Mutex poisoned: {e}"))?;
+        guard.as_ref().expect("bridge was just started").kill_session(&provider_id)
+    })
+}
+
+/// Retry a failed publish record.
+/// For Facebook Marketplace, resets to AwaitingLogin so the login banner appears.
+/// For other platforms, resets the record and republishes directly.
+#[tauri::command]
+pub async fn retry_publish(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+    article_id: String,
+    platform_id: String,
+) -> Result<(), String> {
+    // For other (non-eBay) platforms: remove the record and republish
+    {
+        let mut records = state.publish_records.lock().map_err(|e| e.to_string())?;
+        records.retain(|r| !(r.article_id == article_id && r.platform_id == platform_id));
+    }
+    save_records(&app, &state)?;
+
+    // Republish
+    publish_articles(
+        state,
+        app,
+        vec![PublishTargetInput {
+            article_id,
+            platform_id,
+        }],
+    )
+    .await
 }
 
 #[tauri::command]

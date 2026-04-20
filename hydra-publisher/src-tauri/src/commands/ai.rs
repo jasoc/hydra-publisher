@@ -50,12 +50,14 @@ pub async fn start_ai_fill(
                     serde_yaml::from_str(&content).map_err(|e| e.to_string())?;
 
                 if article_ids.contains(&manifest.id) {
-                    // Check if article needs AI fill (missing name or description or price)
+                    // Check if article needs AI fill (missing name, description, price, category, or condition)
                     let needs_name = manifest.name.starts_with("Article ");
                     let needs_desc = manifest.description.is_empty();
                     let needs_price = manifest.price.is_none() || manifest.price == Some(0.0);
+                    let needs_category = manifest.category.as_ref().map_or(true, |c| c.is_empty());
+                    let needs_condition = manifest.condition.as_ref().map_or(true, |c| c.is_empty());
 
-                    if needs_name || needs_desc || needs_price {
+                    if needs_name || needs_desc || needs_price || needs_category || needs_condition {
                         articles_to_process.push((manifest, path.to_string_lossy().to_string()));
                     }
                 }
@@ -78,6 +80,12 @@ pub async fn start_ai_fill(
         }
         if manifest.price.is_none() || manifest.price == Some(0.0) {
             missing.push("price");
+        }
+        if manifest.category.as_ref().map_or(true, |c| c.is_empty()) {
+            missing.push("category");
+        }
+        if manifest.condition.as_ref().map_or(true, |c| c.is_empty()) {
+            missing.push("condition");
         }
 
         let description = format!(
@@ -183,6 +191,8 @@ async fn process_ai_request(
     let needs_name = manifest.name.starts_with("Article ");
     let needs_desc = manifest.description.is_empty();
     let needs_price = manifest.price.is_none() || manifest.price == Some(0.0);
+    let needs_category = manifest.category.as_ref().map_or(true, |c| c.is_empty());
+    let needs_condition = manifest.condition.as_ref().map_or(true, |c| c.is_empty());
 
     let language_name = match settings.language.as_str() {
         "it" => "Italian",
@@ -196,12 +206,27 @@ async fn process_ai_request(
     let prompt = format!(
         "You are helping list a used item for sale on an online marketplace. \
          Look at the photos and provide the following fields that are currently missing: \
-         {}{}{}. \
-         Respond in {}. Return ONLY a JSON object with these keys (include all three even if some already exist): \
-         {{\"name\": \"short product name\", \"description\": \"marketplace listing description\", \"price\": 0.00}}",
+         {}{}{}{}{}. \
+         Respond in {}. \
+         For \"category\", pick EXACTLY one from this list: \
+         [\"Attrezzi\", \"Arredamento\", \"Articoli per la casa\", \"Giardino\", \"Elettrodomestici\", \
+         \"Videogiochi\", \"Libri, film e musica\", \"Borse e valigie\", \
+         \"Abbigliamento e scarpe da donna\", \"Abbigliamento e scarpe da uomo\", \
+         \"Gioielli e accessori\", \"Salute e bellezza\", \"Articoli per animali\", \
+         \"Neonati e bambini\", \"Giocattoli e videogiochi\", \"Elettronica e computer\", \
+         \"Cellulari\", \"Biciclette\", \"Arte e artigianato\", \
+         \"Sport e attività all'aperto\", \"Ricambi auto\", \"Strumenti musicali\", \
+         \"Articoli d'antiquariato e da collezione\", \"Mercatino dell'usato\", \"Varie\", \"Veicoli\"]. \
+         For \"condition\", pick EXACTLY one from: \
+         [\"Nuovo\", \"Usato - Come nuovo\", \"Usato - Buono\", \"Usato - Accettabile\"]. \
+         Return ONLY a JSON object with these keys (include all even if some already exist): \
+         {{\"name\": \"short product name\", \"description\": \"marketplace listing description\", \
+         \"price\": 0.00, \"category\": \"exact category from list\", \"condition\": \"exact condition from list\"}}",
         if needs_name { "name, " } else { "" },
         if needs_desc { "description, " } else { "" },
-        if needs_price { "price" } else { "" },
+        if needs_price { "price, " } else { "" },
+        if needs_category { "category, " } else { "" },
+        if needs_condition { "condition" } else { "" },
         language_name
     );
 
@@ -304,6 +329,16 @@ async fn process_ai_request(
                                     if needs_price {
                                         if let Some(price) = parsed["price"].as_f64() {
                                             m.price = Some(price);
+                                        }
+                                    }
+                                    if needs_category {
+                                        if let Some(cat) = parsed["category"].as_str() {
+                                            m.category = Some(cat.to_string());
+                                        }
+                                    }
+                                    if needs_condition {
+                                        if let Some(cond) = parsed["condition"].as_str() {
+                                            m.condition = Some(cond.to_string());
                                         }
                                     }
 
@@ -506,9 +541,22 @@ async fn process_regenerate(
 
     let prompt = format!(
         "You are helping list a used item for sale on an online marketplace. \
-         Look at the photos and provide: name, description, price. \
-         Respond in {}. Return ONLY a JSON object with these keys: \
-         {{\"name\": \"short product name\", \"description\": \"marketplace listing description\", \"price\": 0.00}}",
+         Look at the photos and provide: name, description, price, category, condition. \
+         Respond in {}. \
+         For \"category\", pick EXACTLY one from this list: \
+         [\"Attrezzi\", \"Arredamento\", \"Articoli per la casa\", \"Giardino\", \"Elettrodomestici\", \
+         \"Videogiochi\", \"Libri, film e musica\", \"Borse e valigie\", \
+         \"Abbigliamento e scarpe da donna\", \"Abbigliamento e scarpe da uomo\", \
+         \"Gioielli e accessori\", \"Salute e bellezza\", \"Articoli per animali\", \
+         \"Neonati e bambini\", \"Giocattoli e videogiochi\", \"Elettronica e computer\", \
+         \"Cellulari\", \"Biciclette\", \"Arte e artigianato\", \
+         \"Sport e attività all'aperto\", \"Ricambi auto\", \"Strumenti musicali\", \
+         \"Articoli d'antiquariato e da collezione\", \"Mercatino dell'usato\", \"Varie\", \"Veicoli\"]. \
+         For \"condition\", pick EXACTLY one from: \
+         [\"Nuovo\", \"Usato - Come nuovo\", \"Usato - Buono\", \"Usato - Accettabile\"]. \
+         Return ONLY a JSON object with these keys: \
+         {{\"name\": \"short product name\", \"description\": \"marketplace listing description\", \
+         \"price\": 0.00, \"category\": \"exact category from list\", \"condition\": \"exact condition from list\"}}",
         language_name
     );
 
@@ -595,6 +643,12 @@ async fn process_regenerate(
                                     }
                                     if let Some(price) = parsed["price"].as_f64() {
                                         m.price = Some(price);
+                                    }
+                                    if let Some(cat) = parsed["category"].as_str() {
+                                        m.category = Some(cat.to_string());
+                                    }
+                                    if let Some(cond) = parsed["condition"].as_str() {
+                                        m.condition = Some(cond.to_string());
                                     }
 
                                     if let Ok(yaml) = serde_yaml::to_string(&m) {

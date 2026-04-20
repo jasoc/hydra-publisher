@@ -11,4 +11,7 @@ export interface AppSettings {
   ebayPaymentPolicyId: string;
   ebayReturnPolicyId: string;
   ebayCategoryId: string;
+  fbEmail: string;
+  fbPassword: string;
+  enabledPlatforms: string[];
 }

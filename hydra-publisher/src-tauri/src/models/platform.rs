@@ -6,6 +6,7 @@ use crate::models::article::Article;
 pub struct PlatformInfo {
     pub id: String,
     pub name: String,
+    pub supports_update: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +20,7 @@ pub struct PublishRecord {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PublishStatus {
     NotPublished,
+    AwaitingLogin,
     Publishing,
     Published,
     Failed(String),

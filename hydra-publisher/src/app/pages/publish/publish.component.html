@@ -24,6 +24,11 @@
               <mat-icon class="expand-icon">{{ isExpanded(group.articleId) ? 'expand_less' : 'expand_more' }}</mat-icon>
               <span class="article-name">{{ group.articleName }}</span>
               <span class="spacer"></span>
+              @if (groupSummary(group).awaiting > 0) {
+                <span class="summary-chip chip-awaiting">
+                  <mat-icon>login</mat-icon>{{ groupSummary(group).awaiting }}
+                </span>
+              }
               @if (groupSummary(group).progress > 0) {
                 <span class="summary-chip chip-progress">
                   <mat-icon>sync</mat-icon>{{ groupSummary(group).progress }}
@@ -55,16 +60,25 @@
                     <button
                       mat-icon-button
                       (click)="syncRecord(record)"
-                      matTooltip="Sync to platform"
-                      [disabled]="isInProgress(record.status)">
+                      [matTooltip]="supportsUpdate(record.platformId) ? 'Sync to platform' : 'This platform does not support updates'"
+                      [disabled]="isInProgress(record.status) || !supportsUpdate(record.platformId)">
                       <mat-icon>sync</mat-icon>
                     </button>
-                    @if (isError(record.status) && record.platformId === 'ebay') {
+                    @if (isInProgress(record.status) || isAwaitingLogin(record.status)) {
                       <button
                         mat-icon-button
                         color="warn"
-                        (click)="deleteAndRetry(record)"
-                        matTooltip="Delete eBay offer and retry">
+                        (click)="forceResetRecord(record)"
+                        matTooltip="Force reset (mark as Failed)">
+                        <mat-icon>block</mat-icon>
+                      </button>
+                    }
+                    @if (isError(record.status)) {
+                      <button
+                        mat-icon-button
+                        color="warn"
+                        (click)="retryRecord(record)"
+                        matTooltip="Retry">
                         <mat-icon>restart_alt</mat-icon>
                       </button>
                     }
@@ -114,6 +128,16 @@
   @if (step() === 'select-matrix') {
     <div class="section flow-section">
       <h3>Step 2: Select platforms for each article</h3>
+      <div class="matrix-toolbar">
+        <button mat-button (click)="matrixSelectAll()">
+          <mat-icon>check_box</mat-icon>
+          Select all
+        </button>
+        <button mat-button (click)="matrixDeselectAll()">
+          <mat-icon>check_box_outline_blank</mat-icon>
+          Deselect all
+        </button>
+      </div>
       <div class="matrix">
         <table>
           <thead>
@@ -130,11 +154,20 @@
                 <td>{{ getArticleName(articleId) }}</td>
                 @for (platform of platforms(); track platform.id) {
                   <td class="matrix-cell">
-                    <mat-checkbox
-                      [checked]="isMatrixChecked(articleId, platform.id) || isMatrixDisabled(articleId, platform.id)"
-                      [disabled]="isMatrixDisabled(articleId, platform.id)"
-                      (change)="toggleMatrix(articleId, platform.id)">
-                    </mat-checkbox>
+                    @if (isAlreadyPublished(articleId, platform.id)) {
+                      <div class="republish-cell" (click)="toggleMatrix(articleId, platform.id)">
+                        @if (isMatrixChecked(articleId, platform.id)) {
+                          <mat-icon class="republish-icon active" matTooltip="Will republish from scratch">restart_alt</mat-icon>
+                        } @else {
+                          <mat-icon class="republish-icon" matTooltip="Already published — click to force republish">check_circle</mat-icon>
+                        }
+                      </div>
+                    } @else {
+                      <mat-checkbox
+                        [checked]="isMatrixChecked(articleId, platform.id)"
+                        (change)="toggleMatrix(articleId, platform.id)">
+                      </mat-checkbox>
+                    }
                   </td>
                 }
               </tr>

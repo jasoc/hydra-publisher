@@ -21,6 +21,16 @@ pub struct AppSettings {
     pub ebay_return_policy_id: String,
     #[serde(default)]
     pub ebay_category_id: String,
+    #[serde(default)]
+    pub fb_email: String,
+    #[serde(default)]
+    pub fb_password: String,
+    #[serde(default = "default_enabled_platforms")]
+    pub enabled_platforms: Vec<String>,
+}
+
+fn default_enabled_platforms() -> Vec<String> {
+    vec!["test".to_string(), "facebook_marketplace".to_string()]
 }
 
 impl Default for AppSettings {
@@ -48,6 +58,9 @@ impl Default for AppSettings {
             ebay_payment_policy_id: String::new(),
             ebay_return_policy_id: String::new(),
             ebay_category_id: String::new(),
+            fb_email: String::new(),
+            fb_password: String::new(),
+            enabled_platforms: default_enabled_platforms(),
         }
     }
 }

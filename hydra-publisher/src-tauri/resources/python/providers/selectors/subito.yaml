@@ -1,0 +1,82 @@
+# Subito.it selectors — verified 2026-04-07 via MCP Chrome DevTools
+#
+# IMPORTANT NOTES:
+#   - Condizione field: JS .click() does NOT open React-Select.
+#     Must use real Selenium .click() + send_keys(Keys.ARROW_DOWN).
+#     Options appear as [role="option"] elements.
+#   - Comune + Phone: plain send_keys() does NOT trigger React state.
+#     Must use the React native setter JS hack (see subito.py _JS_REACT_SET).
+#   - File input: hidden (display:none). Make visible via JS before send_keys.
+#   - Modal: user-menu dialog appears on every page load. Hide via JS.
+#
+# The FormFiller base class is NOT used for Subito because of the above
+# React-specific interactions. The full logic lives in SubitoProvider.publish().
+
+# Direct insertion URL (skip /vendere/ homepage)
+publish_url: "https://inserimento.subito.it/?category={category_id}&subject={title}&from=vendere"
+
+# ── Input element selectors ───────────────────────────────────────────────────
+selectors:
+  modal_dialog:
+    css: '[role="dialog"]'
+    action: hide_js           # document.querySelector(...).style.display = 'none'
+
+  file_input:
+    css: 'input[type="file"]'
+    action: show_js_then_sendkeys  # must be made visible before send_keys
+
+  title:
+    # Pre-filled via URL query param ?subject=..., no interaction needed
+    id: title
+
+  description:
+    css: 'textarea'
+    action: react_set         # use _JS_REACT_SET helper
+
+  price:
+    id: price
+    action: react_set
+
+  condition:
+    # React-Select (react-select-2-input): requires real .click() + ArrowDown
+    css: '[aria-label="Condizione"]'
+    action: click_arrowdown_then_option
+    options_css: '[role="option"]'
+    # Match by first word before " - " in the label
+
+  comune:
+    id: location
+    action: react_set_then_ajax_click  # use _JS_SET_COMUNE helper
+    options_css: '[role="option"]'
+
+  phone:
+    id: phone
+    action: react_set
+
+# ── Button selectors ──────────────────────────────────────────────────────────
+buttons:
+  continua:
+    xpath: '//button[normalize-space(text())="Continua"]'
+    leads_to_url: '/anteprima'
+
+  pubblica_annuncio:
+    xpath: '//button[normalize-space(text())="Pubblica annuncio"]'
+    leads_to_url: 'promuovi-form'
+    listing_id_pattern: 'id:ad:([a-f0-9-]{36})'  # extracted from URL after click
+
+  # Post-publish upsell screens (optional, may or may not appear)
+  non_mi_interessa:
+    xpath: '//button[normalize-space(text())="Non mi interessa"]'
+    optional: true
+    timeout: 4
+
+  continua_visibilita_minima:
+    xpath: '//button[normalize-space(text())="Continua con visibilità minima"]'
+    optional: true
+    timeout: 5
+
+# ── Page flow ─────────────────────────────────────────────────────────────────
+# Step 1: inserimento.subito.it/?category=...  (form)
+# Step 2: inserimento.subito.it/anteprima      (preview — single click to publish)
+# Step 3: areariservata.subito.it/annunci/promuovi-form/id:ad:<UUID>  (upsell)
+# Final:  areariservata.subito.it/annunci/inserito?adId=<UUID>        (confirmed)

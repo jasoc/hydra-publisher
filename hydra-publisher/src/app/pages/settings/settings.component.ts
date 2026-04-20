@@ -6,6 +6,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { SettingsService } from '../../services/settings.service';
 import { AppSettings } from '../../models/settings.model';
@@ -23,6 +24,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
     MatSelectModule,
     MatButtonModule,
     MatIconModule,
+    MatCheckboxModule,
     MatSnackBarModule,
   ],
   templateUrl: './settings.component.html',
@@ -42,6 +44,35 @@ export class SettingsComponent implements OnInit {
   ebayPaymentPolicyId = '';
   ebayReturnPolicyId = '';
   ebayCategoryId = '';
+  enabledPlatforms: string[] = ['test', 'facebook_marketplace'];
+
+  seleniumLoginPlatforms = [
+    { id: 'facebook_marketplace', name: 'Facebook Marketplace' },
+    { id: 'vinted', name: 'Vinted' },
+    { id: 'subito', name: 'Subito.it' },
+  ];
+
+  allPlatforms = [
+    { id: 'test', name: 'Test Platform' },
+    { id: 'ebay', name: 'eBay' },
+    { id: 'subito', name: 'Subito.it' },
+    { id: 'local_test_selenium', name: 'Local Test Selenium' },
+    { id: 'facebook_marketplace', name: 'Facebook Marketplace' },
+    { id: 'vinted', name: 'Vinted' },
+  ];
+
+  isPlatformEnabled(id: string): boolean {
+    return this.enabledPlatforms.includes(id);
+  }
+
+  togglePlatform(id: string): void {
+    if (this.enabledPlatforms.includes(id)) {
+      this.enabledPlatforms = this.enabledPlatforms.filter(p => p !== id);
+    } else {
+      this.enabledPlatforms = [...this.enabledPlatforms, id];
+    }
+  }
+
   categorySearchQuery = '';
   categorySearchResults: { categoryId: string; categoryName: string; categoryPath: string }[] = [];
   searchingCategories = signal(false);
@@ -110,6 +141,7 @@ export class SettingsComponent implements OnInit {
       this.ebayPaymentPolicyId = settings.ebayPaymentPolicyId || '';
       this.ebayReturnPolicyId = settings.ebayReturnPolicyId || '';
       this.ebayCategoryId = settings.ebayCategoryId || '';
+      this.enabledPlatforms = settings.enabledPlatforms ?? ['test', 'facebook_marketplace'];
     } finally {
       this.loading.set(false);
     }
@@ -176,6 +208,9 @@ export class SettingsComponent implements OnInit {
       ebayPaymentPolicyId: this.ebayPaymentPolicyId,
       ebayReturnPolicyId: this.ebayReturnPolicyId,
       ebayCategoryId: this.ebayCategoryId,
+      fbEmail: currentSettings?.fbEmail || '',
+      fbPassword: currentSettings?.fbPassword || '',
+      enabledPlatforms: this.enabledPlatforms,
     };
 
     try {
@@ -200,6 +235,42 @@ export class SettingsComponent implements OnInit {
       }
     } catch {
       // User cancelled
+    }
+  }
+
+  async openLoginSession(providerId: string): Promise<void> {
+    try {
+      await invoke('open_provider_session', { providerId });
+      this.snackBar.open('Browser opened. Complete login manually, then close or leave it open.', 'OK', { duration: 4000 });
+    } catch (err) {
+      this.snackBar.open(`Unable to open browser session: ${err}`, 'OK', { duration: 5000 });
+    }
+  }
+
+  async clearAllAppData(): Promise<void> {
+    const confirmed = window.confirm(
+      'This will delete ALL app data (catalog copies, publication records, and settings).\\n\\nOriginal source photos will NOT be deleted.\\n\\nContinue?'
+    );
+    if (!confirmed) return;
+
+    try {
+      await invoke('clear_all_app_data');
+      const settings = await this.settingsService.load();
+      this.catalogRoot = settings.catalogRoot;
+      this.aiHost = settings.aiHost;
+      this.aiToken = settings.aiToken;
+      this.aiModel = settings.aiModel;
+      this.language = settings.language;
+      this.ebayToken = settings.ebayToken || '';
+      this.ebayMarketplaceId = settings.ebayMarketplaceId || 'EBAY_IT';
+      this.ebayFulfillmentPolicyId = settings.ebayFulfillmentPolicyId || '';
+      this.ebayPaymentPolicyId = settings.ebayPaymentPolicyId || '';
+      this.ebayReturnPolicyId = settings.ebayReturnPolicyId || '';
+      this.ebayCategoryId = settings.ebayCategoryId || '';
+      this.enabledPlatforms = settings.enabledPlatforms ?? ['test', 'facebook_marketplace'];
+      this.snackBar.open('All app data cleared.', 'OK', { duration: 3000 });
+    } catch (err) {
+      this.snackBar.open(`Failed to clear app data: ${err}`, 'OK', { duration: 5000 });
     }
   }
 }

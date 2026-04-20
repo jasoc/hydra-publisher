@@ -85,8 +85,13 @@ impl EbayPlatform {
     ///   USED_GOOD, USED_ACCEPTABLE, FOR_PARTS_OR_NOT_WORKING
     fn map_condition(raw: &str) -> &'static str {
         match raw.to_lowercase().trim() {
-            // Already valid eBay enum values
-            "new" | "nuovo"                             => "NEW",
+            // Global conditions (from article dropdown)
+            "nuovo"                                     => "NEW",
+            "usato - come nuovo"                        => "LIKE_NEW",
+            "usato - buono"                             => "USED_GOOD",
+            "usato - accettabile"                       => "USED_ACCEPTABLE",
+            // Legacy / already valid eBay enum values
+            "new"                                       => "NEW",
             "like_new" | "come nuovo" | "come_nuovo"   => "LIKE_NEW",
             "new_other"                                 => "NEW_OTHER",
             "new_with_defects"                          => "NEW_WITH_DEFECTS",

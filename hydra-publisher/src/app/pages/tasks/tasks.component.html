@@ -1,0 +1,135 @@
+<div class="tasks-page">
+  <div class="toolbar">
+    <h2>Tasks</h2>
+    <span class="spacer"></span>
+    <button mat-icon-button matTooltip="Refresh" (click)="refresh()" [disabled]="loading()">
+      <mat-icon>refresh</mat-icon>
+    </button>
+  </div>
+
+  @if (loading()) {
+    <mat-progress-bar mode="indeterminate" style="margin-bottom: 16px"></mat-progress-bar>
+  }
+
+  <!-- ── Active Selenium sessions ── -->
+  <section class="section">
+    <h3 class="section-title">
+      <mat-icon class="section-icon">computer</mat-icon>
+      Browser Sessions
+      <span class="count-badge">{{ activeSessions().length }}</span>
+    </h3>
+    @if (activeSessions().length === 0) {
+      <p class="empty-hint">No browser sessions active.</p>
+    } @else {
+      <div class="session-list">
+        @for (sid of activeSessions(); track sid) {
+          <div class="session-row">
+            <mat-icon class="status-progress">open_in_browser</mat-icon>
+            <span class="session-name">{{ sid }}</span>
+            <span class="session-label status-progress">Running</span>
+            <span class="spacer"></span>
+            <button
+              mat-icon-button
+              color="warn"
+              matTooltip="Close browser session"
+              (click)="killSession(sid)">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </section>
+
+  <mat-divider></mat-divider>
+
+  <!-- ── In-progress tasks ── -->
+  <section class="section">
+    <h3 class="section-title">
+      <mat-icon class="section-icon status-progress">sync</mat-icon>
+      In Progress
+      <span class="count-badge">{{ inProgressRecords().length }}</span>
+    </h3>
+    @if (inProgressRecords().length === 0) {
+      <p class="empty-hint">No tasks currently running.</p>
+    } @else {
+      <div class="record-list">
+        @for (record of inProgressRecords(); track record.articleId + record.platformId) {
+          <div class="record-row">
+            <mat-icon [class]="statusClass(record.status)">{{ statusIcon(record.status) }}</mat-icon>
+            <div class="record-info">
+              <span class="record-article">{{ getArticleName(record.articleId) }}</span>
+              <span class="record-platform">{{ record.platformId }}</span>
+            </div>
+            <span class="status-text" [class]="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+            <mat-progress-bar mode="indeterminate" class="row-progress"></mat-progress-bar>
+            <span class="spacer"></span>
+            <button
+              mat-icon-button
+              color="warn"
+              matTooltip="Force reset (mark as Failed)"
+              (click)="forceReset(record)">
+              <mat-icon>block</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </section>
+
+  <mat-divider></mat-divider>
+
+  <!-- ── Failed tasks ── -->
+  <section class="section">
+    <h3 class="section-title">
+      <mat-icon class="section-icon status-error">error</mat-icon>
+      Failed
+      <span class="count-badge count-error">{{ failedRecords().length }}</span>
+    </h3>
+    @if (failedRecords().length === 0) {
+      <p class="empty-hint">No failed tasks.</p>
+    } @else {
+      <div class="record-list">
+        @for (record of failedRecords(); track record.articleId + record.platformId) {
+          <div class="record-row">
+            <mat-icon class="status-error">error</mat-icon>
+            <div class="record-info">
+              <span class="record-article">{{ getArticleName(record.articleId) }}</span>
+              <span class="record-platform">{{ record.platformId }}</span>
+            </div>
+            <span class="status-text status-error">{{ statusLabel(record.status) }}</span>
+            <span class="spacer"></span>
+          </div>
+        }
+      </div>
+    }
+  </section>
+
+  <mat-divider></mat-divider>
+
+  <!-- ── Completed (history) ── -->
+  <section class="section">
+    <h3 class="section-title">
+      <mat-icon class="section-icon status-success">check_circle</mat-icon>
+      History
+      <span class="count-badge count-success">{{ successRecords().length }}</span>
+    </h3>
+    @if (successRecords().length === 0) {
+      <p class="empty-hint">No successful publications yet.</p>
+    } @else {
+      <div class="record-list">
+        @for (record of successRecords(); track record.articleId + record.platformId) {
+          <div class="record-row">
+            <mat-icon class="status-success">check_circle</mat-icon>
+            <div class="record-info">
+              <span class="record-article">{{ getArticleName(record.articleId) }}</span>
+              <span class="record-platform">{{ record.platformId }}</span>
+            </div>
+            <span class="status-text status-success">{{ statusLabel(record.status) }}</span>
+            <span class="spacer"></span>
+          </div>
+        }
+      </div>
+    }
+  </section>
+</div>

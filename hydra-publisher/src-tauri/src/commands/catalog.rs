@@ -3,6 +3,7 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 use crate::models::article::{Article, ArticleManifest};
 use crate::models::settings::AppSettings;
+use crate::models::platform::PublishRecord;
 use crate::state::AppState;
 
 fn get_catalog_root(app: &AppHandle) -> Result<String, String> {
@@ -151,6 +152,60 @@ pub async fn delete_article(folder_path: String) -> Result<(), String> {
     if path.exists() {
         std::fs::remove_dir_all(path).map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_all_app_data(
+    state: tauri::State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let catalog_root = get_catalog_root(&app)?;
+
+    // Stop Python bridge (closes running Selenium sessions) but keep persisted profiles.
+    {
+        let mut bridge = state.python_bridge.lock().map_err(|e| e.to_string())?;
+        *bridge = None;
+    }
+
+    // Delete all local catalog copies managed by the app.
+    let root = Path::new(&catalog_root);
+    if root.exists() {
+        std::fs::remove_dir_all(root).map_err(|e| e.to_string())?;
+    }
+    std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
+
+    // Reset settings to defaults.
+    {
+        let settings_store = app.store("settings.json").map_err(|e| e.to_string())?;
+        let defaults = AppSettings::default();
+        let value = serde_json::to_value(&defaults).map_err(|e| e.to_string())?;
+        settings_store.set("settings", value);
+        settings_store.save().map_err(|e| e.to_string())?;
+    }
+
+    // Clear publish records persisted on disk.
+    {
+        let records_store = app.store("publish_records.json").map_err(|e| e.to_string())?;
+        let empty = serde_json::to_value(Vec::<PublishRecord>::new()).map_err(|e| e.to_string())?;
+        records_store.set("records", empty);
+        records_store.save().map_err(|e| e.to_string())?;
+    }
+
+    // Clear in-memory runtime state.
+    {
+        let mut publish_records = state.publish_records.lock().map_err(|e| e.to_string())?;
+        publish_records.clear();
+    }
+    {
+        let mut ai_requests = state.ai_requests.lock().map_err(|e| e.to_string())?;
+        ai_requests.clear();
+    }
+    {
+        let mut article_counter = state.article_counter.lock().map_err(|e| e.to_string())?;
+        *article_counter = 0;
+    }
+
     Ok(())
 }
 

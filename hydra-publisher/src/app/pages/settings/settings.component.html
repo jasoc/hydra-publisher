@@ -50,6 +50,18 @@
         </mat-select>
       </mat-form-field>
 
+      <h3>Platforms</h3>
+      <p class="section-hint">Enable the platforms you want to use for publishing.</p>
+      <div class="platforms-list">
+        @for (p of allPlatforms; track p.id) {
+          <mat-checkbox
+            [checked]="isPlatformEnabled(p.id)"
+            (change)="togglePlatform(p.id)">
+            {{ p.name }}
+          </mat-checkbox>
+        }
+      </div>
+
       <h3>eBay</h3>
 
       <mat-form-field appearance="outline" class="full-width">
@@ -138,6 +150,24 @@
           }
         </div>
       }
+
+      <h3>Selenium Login Sessions</h3>
+      <p class="section-hint">Open a browser session with the persistent Hydra profile and log in manually for each platform.</p>
+      <div class="field-row">
+        @for (p of seleniumLoginPlatforms; track p.id) {
+          <button mat-raised-button (click)="openLoginSession(p.id)">
+            <mat-icon>open_in_new</mat-icon>
+            Login {{ p.name }}
+          </button>
+        }
+      </div>
+
+      <h3>Danger Zone</h3>
+      <p class="section-hint">Delete all app data: local catalog copies, publish records, and settings. Original source photos are not touched.</p>
+      <button mat-raised-button color="warn" (click)="clearAllAppData()">
+        <mat-icon>delete_forever</mat-icon>
+        Delete all app data
+      </button>
     </div>
   }
 </div>

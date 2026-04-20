@@ -19,6 +19,10 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/publish/publish.component').then(m => m.PublishComponent),
   },
   {
+    path: 'tasks',
+    redirectTo: 'publish',
+  },
+  {
     path: 'ai',
     loadComponent: () => import('./pages/ai-requests/ai-requests.component').then(m => m.AiRequestsComponent),
   },

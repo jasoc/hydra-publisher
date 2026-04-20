@@ -84,6 +84,11 @@
     background: rgba(100, 181, 246, 0.15);
     color: #64b5f6;
   }
+
+  &.chip-awaiting {
+    background: rgba(255, 183, 77, 0.15);
+    color: #ffb74d;
+  }
 }
 
 .group-body {
@@ -119,10 +124,11 @@
 }
 
 // Status color classes (applied to both mat-icon and status-text)
-.status-success { color: #81c784; }
-.status-error   { color: #e57373; }
+.status-success  { color: #81c784; }
+.status-error    { color: #e57373; }
 .status-progress { color: #64b5f6; }
-.status-idle    { color: rgba(255, 255, 255, 0.35); }
+.status-awaiting { color: #ffb74d; }
+.status-idle     { color: rgba(255, 255, 255, 0.35); }
 
 // ── Publish flow ─────────────────────────────────────────────────────────────
 
@@ -189,11 +195,43 @@
   }
 }
 
+.republish-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.republish-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  color: #81c784;
+  transition: color 0.15s;
+
+  &.active {
+    color: #ffb74d;
+  }
+}
+
 .flow-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+.matrix-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────

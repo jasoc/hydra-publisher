@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { invoke } from '@tauri-apps/api/core';
-import { PlatformInfo, PublishRecord } from '../models/platform.model';
+import { PlatformInfo, PublishRecord, PublishTarget } from '../models/platform.model';
 
 @Injectable({ providedIn: 'root' })
 export class PublishService {
@@ -14,8 +14,8 @@ export class PublishService {
     this.platformsSignal.set(platforms);
   }
 
-  async publish(articleIds: string[], platformIds: string[]): Promise<void> {
-    await invoke('publish_articles', { articleIds, platformIds });
+  async publish(targets: PublishTarget[]): Promise<void> {
+    await invoke('publish_articles', { targets });
     await this.refreshRecords();
   }
 

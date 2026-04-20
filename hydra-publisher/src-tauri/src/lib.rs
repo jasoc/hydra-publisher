@@ -42,6 +42,7 @@ pub fn run() {
             commands::catalog::get_article,
             commands::catalog::update_article,
             commands::catalog::delete_article,
+            commands::catalog::clear_all_app_data,
             commands::ai::start_ai_fill,
             commands::ai::get_ai_requests,
             commands::ai::regenerate_article_fields,
@@ -50,6 +51,11 @@ pub fn run() {
             commands::publish::get_publish_records,
             commands::publish::update_articles,
             commands::publish::delete_ebay_offer,
+            commands::publish::retry_publish,
+            commands::publish::open_provider_session,
+            commands::publish::force_reset_task,
+            commands::publish::get_active_sessions,
+            commands::publish::kill_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
