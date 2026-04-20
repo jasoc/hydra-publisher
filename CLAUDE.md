@@ -67,7 +67,7 @@ eBay API (REST) ◄────────────────────�
 - **Article on disk**: `~/.hydra-publisher/catalog/<uuid>/manifest.yaml` + images
 - **Publish record**: stored in Tauri Store (`publish_records.json`), keyed by `article_id + platform_id`
 - **Python server**: spawned once at app start, port written to stdout as `LISTENING:<port>`, stored in `PythonBridge` state
-- **Selenium sessions**: one Chrome instance per provider, persistent profile at `~/.hydra-publisher/chrome-profiles/<provider_id>/`
+- **Selenium sessions**: one shared Chrome instance with a single persistent profile at `~/.hydra-publisher/chrome-profile/`, reused across all providers
 
 ---
 
@@ -198,7 +198,7 @@ See **`docs/selenium-selectors.md`** for the recommended approach to discovering
 ## Data reset behavior (2026-04)
 
 - A new Settings action clears all app data: local catalog copies, publish records, in-memory queues/counters, and settings.
-- The reset intentionally **does not delete** Selenium Chrome profiles under `~/.hydra-publisher/chrome-profiles/`.
+- The reset intentionally **does not delete** the Selenium Chrome profile under `~/.hydra-publisher/chrome-profile/`.
 - Original source photos are never touched because only catalog copies under `catalogRoot` are removed.
 
 ---

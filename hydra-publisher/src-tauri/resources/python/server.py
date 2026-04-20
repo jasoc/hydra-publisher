@@ -64,34 +64,34 @@ user_agents = [
     "Mozilla/5.0 (iPhone14,3; U; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/602.1.50 (KHTML, like Gecko) Version/10.0 Mobile/19A346 Safari/602.1"
 ]
 
-# Active Selenium WebDriver instances, keyed by provider id.
-# Each entry is created on the first call to a SeleniumProvider and reused
-# for all subsequent calls so the user only needs to log in once per session.
-_selenium_sessions: Dict[str, Any] = {}
+# Shared Selenium WebDriver instance — a single Chrome browser (and profile)
+# is reused across all providers. Created on the first call to any
+# SeleniumProvider and kept alive until /stop or the user closes Chrome.
+_shared_driver: Any = None
 _shutdown_event = threading.Event()
 
 
 def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
     """
-    Return the cached WebDriver for this provider, or start a new browser
-    session if none exists or the previous one died (user closed Chrome).
-    On first creation, provider.login(driver) is called.
+    Return the shared WebDriver, or start a new browser session if none
+    exists or the previous one died (user closed Chrome).
+    A single Chrome instance with one profile is shared across all providers.
     """
-    if provider_id in _selenium_sessions:
-        driver = _selenium_sessions[provider_id]
-        # Check if the browser is still alive
+    global _shared_driver
+
+    if _shared_driver is not None:
         try:
-            _ = driver.title  # will throw if the session is dead
-            return driver
+            _ = _shared_driver.title  # will throw if the session is dead
+            return _shared_driver
         except Exception:
-            print(f"[server] Session for {provider_id!r} is dead, recreating...")
-            _selenium_sessions.pop(provider_id, None)
+            print("[server] Shared Chrome session is dead, recreating...")
+            _shared_driver = None
 
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
 
-    # Persistent Chrome profile per provider so sessions survive restarts
-    profile_dir = os.path.expanduser(f"~/.hydra-publisher/chrome-profiles/{provider_id}")
+    # Single persistent Chrome profile shared by all providers
+    profile_dir = os.path.expanduser("~/.hydra-publisher/chrome-profile")
     os.makedirs(profile_dir, exist_ok=True)
 
     def _build_options(user_data_dir: str | None) -> Options:
@@ -109,6 +109,14 @@ def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
         opts.add_argument("--disable-gpu")
         random_user_agent = random.choice(user_agents)
         opts.add_argument(f"--user-agent={random_user_agent}")
+
+        # ── Anti-detection flags ──────────────────────────────────────────
+        # Hide navigator.webdriver, suppress the "Chrome is being controlled
+        # by automated test software" infobar, and disable the Blink
+        # AutomationControlled feature flag.
+        opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+        opts.add_experimental_option("useAutomationExtension", False)
 
         chrome_binary = os.environ.get("HYDRA_CHROME_BINARY", "").strip()
         if not chrome_binary:
@@ -148,11 +156,26 @@ def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
                 f"display={display or 'none'}, chrome={chrome_guess}, error={exc}"
             ) from exc
 
+    # ── Anti-detection: mask navigator.webdriver on every new page ─────
+    try:
+        driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {
+                "source": """
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+                """
+            },
+        )
+    except Exception as exc:
+        print(f"[server] Warning: could not inject anti-detection script: {exc}")
+
     try:
         driver.set_page_load_timeout(60)
     except Exception:
         pass
-    _selenium_sessions[provider_id] = driver
+    _shared_driver = driver
 
     # Give the provider a chance to navigate to the login page and wait for
     # the user to authenticate before processing any article.
@@ -163,13 +186,14 @@ def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
 
 
 def _close_all_sessions() -> None:
-    """Quit all browser sessions so Chrome releases the profile lock."""
-    for provider_id, driver in list(_selenium_sessions.items()):
+    """Quit the shared browser session so Chrome releases the profile lock."""
+    global _shared_driver
+    if _shared_driver is not None:
         try:
-            driver.quit()
+            _shared_driver.quit()
         except Exception:
             pass
-    _selenium_sessions.clear()
+        _shared_driver = None
 
 
 def _dispatch(provider_id: str, method: str, body: dict):
@@ -229,15 +253,15 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.strip("/")
         parts = path.split("/")
 
-        # GET /sessions — list active Selenium sessions
+        # GET /sessions — check if the shared Selenium session is alive
         if parts == ["sessions"]:
             alive = []
-            for pid, driver in list(_selenium_sessions.items()):
+            if _shared_driver is not None:
                 try:
-                    _ = driver.title
-                    alive.append(pid)
+                    _ = _shared_driver.title
+                    alive.append("shared")
                 except Exception:
-                    _selenium_sessions.pop(pid, None)
+                    pass
             self._send_json(200, {"sessions": alive})
             return
 
@@ -247,18 +271,18 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.strip("/")
         parts = path.split("/")
 
-        # DELETE /sessions/<provider_id> — kill a specific Selenium session
+        # DELETE /sessions/<any> — kill the shared Selenium session
         if len(parts) == 2 and parts[0] == "sessions":
-            provider_id = parts[1]
-            driver = _selenium_sessions.pop(provider_id, None)
-            if driver is not None:
+            global _shared_driver
+            if _shared_driver is not None:
                 try:
-                    driver.quit()
+                    _shared_driver.quit()
                 except Exception:
                     pass
-                self._send_json(200, {"ok": True, "killed": provider_id})
+                _shared_driver = None
+                self._send_json(200, {"ok": True, "killed": "shared"})
             else:
-                self._send_json(404, {"error": f"No active session for {provider_id!r}"})
+                self._send_json(404, {"error": "No active session"})
             return
 
         self._send_json(404, {"error": f"Unknown path: {self.path!r}"})
