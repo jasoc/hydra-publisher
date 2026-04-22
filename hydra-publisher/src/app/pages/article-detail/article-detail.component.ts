@@ -13,6 +13,7 @@ import { PhotoGridComponent } from '../../shared/photo-grid/photo-grid.component
 import { CatalogService } from '../../services/catalog.service';
 import { PhotoService } from '../../services/photo.service';
 import { Article } from '../../models/article.model';
+import { CATEGORY_GROUPS, CategoryGroup } from '../../models/categories.model';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 @Component({
@@ -43,43 +44,9 @@ export class ArticleDetailComponent implements OnInit {
   price: number | null = null;
   category: string | null = null;
   condition: string | null = null;
+  brand: string | null = null;
 
-  categories = [
-    // Casa e giardino
-    'Attrezzi',
-    'Arredamento',
-    'Articoli per la casa',
-    'Giardino',
-    'Elettrodomestici',
-    // Intrattenimento
-    'Videogiochi',
-    'Libri, film e musica',
-    // Abbigliamento e accessori
-    'Borse e valigie',
-    'Abbigliamento e scarpe da donna',
-    'Abbigliamento e scarpe da uomo',
-    'Gioielli e accessori',
-    // Famiglia
-    'Salute e bellezza',
-    'Articoli per animali',
-    'Neonati e bambini',
-    'Giocattoli e videogiochi',
-    // Elettronica
-    'Elettronica e computer',
-    'Cellulari',
-    // Hobby
-    'Biciclette',
-    'Arte e artigianato',
-    'Sport e attività all\'aperto',
-    'Ricambi auto',
-    'Strumenti musicali',
-    'Articoli d\'antiquariato e da collezione',
-    // Piccoli annunci
-    'Mercatino dell\'usato',
-    'Varie',
-    // Veicoli
-    'Veicoli',
-  ];
+  categories: CategoryGroup[] = CATEGORY_GROUPS;
 
   conditions = [
     'Nuovo',
@@ -107,6 +74,7 @@ export class ArticleDetailComponent implements OnInit {
       this.price = article.price;
       this.category = article.category;
       this.condition = article.condition;
+      this.brand = article.brand;
     } finally {
       this.loading.set(false);
     }
@@ -135,6 +103,7 @@ export class ArticleDetailComponent implements OnInit {
       price: this.price,
       category: this.category,
       condition: this.condition,
+      brand: this.brand,
     };
 
     try {

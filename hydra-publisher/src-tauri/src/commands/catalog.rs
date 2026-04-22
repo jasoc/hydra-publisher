@@ -138,6 +138,7 @@ pub async fn update_article(article: Article) -> Result<Article, String> {
         videos: article.videos.clone(),
         category: article.category.clone(),
         condition: article.condition.clone(),
+        brand: article.brand.clone(),
     };
 
     let yaml = serde_yaml::to_string(&manifest).map_err(|e| e.to_string())?;

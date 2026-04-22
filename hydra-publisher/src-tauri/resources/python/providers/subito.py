@@ -22,6 +22,7 @@ import time
 import urllib.parse
 from typing import Any
 
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -30,23 +31,172 @@ from selenium.webdriver.support.ui import WebDriverWait
 from base import SeleniumProvider
 
 # ── Category map ──────────────────────────────────────────────────────────────
+# Keys: app category (from categories.model.ts, case-insensitive lookup).
+# Values: Subito numeric category ID.
+# Subito has far fewer categories than Vinted — many app categories map to
+# the same Subito bucket.
 CATEGORY_MAP: dict[str, int] = {
-    "arredamento": 14,
-    "arredamento e casalinghi": 14,
-    "casa e giardino": 14,
-    "elettronica": 8,
-    "informatica": 8,
-    "telefonia": 12,
-    "abbigliamento": 25,
-    "moda": 25,
-    "sport": 32,
-    "hobby": 32,
-    "libri": 19,
-    "musica": 20,
-    "videogiochi": 22,
-    "auto": 101,
-    "moto": 102,
+    # Casa e cucina / Ufficio e casa
+    "Arredamento": 14,
+    "Elettrodomestici cucina": 14,
+    "Pentole e padelle": 14,
+    "Utensili cucina": 14,
+    "Stoviglie": 14,
+    "Biancheria letto": 14,
+    "Tende e tapparelle": 14,
+    "Tappeti": 14,
+    "Candele e profumi casa": 14,
+    "Illuminazione": 14,
+    "Cornici": 14,
+    "Specchi": 14,
+    "Vasi": 14,
+    "Decorazioni parete": 14,
+    "Materiale ufficio": 14,
+    "Attrezzi e bricolage": 14,
+    "Giardino": 14,
+    "Animali": 14,
+    # Elettronica
+    "Videogiochi e console": 22,
+    "Console": 22,
+    "Computer portatili": 8,
+    "Computer desktop": 8,
+    "Componenti PC": 8,
+    "Tastiere": 8,
+    "Mouse": 8,
+    "Monitor": 8,
+    "Stampanti": 8,
+    "Cuffie e auricolari": 8,
+    "Altoparlanti e speaker": 8,
+    "Audio e hi-fi": 8,
+    "Fotocamere": 8,
+    "Obiettivi": 8,
+    "Tablet": 8,
+    "E-reader": 8,
+    "Televisori": 8,
+    "Proiettori": 8,
+    "Smartwatch": 8,
+    "Fitness tracker": 8,
+    "Caricabatterie e power bank": 8,
+    "Cavi e adattatori": 8,
+    # Telefonia
+    "Smartphone": 12,
+    "Accessori telefono": 12,
+    # Abbigliamento (donna + uomo + bambini generico)
+    "Vestiti donna": 25,
+    "Giacche e cappotti donna": 25,
+    "Maglioni e pullover donna": 25,
+    "Abiti donna": 25,
+    "Gonne": 25,
+    "Top e t-shirt donna": 25,
+    "Jeans donna": 25,
+    "Pantaloni donna": 25,
+    "Pantaloncini donna": 25,
+    "Costumi da bagno donna": 25,
+    "Lingerie e pigiami": 25,
+    "Abbigliamento sportivo donna": 25,
+    "Scarpe donna": 25,
+    "Stivali donna": 25,
+    "Sandali donna": 25,
+    "Tacchi": 25,
+    "Sneakers donna": 25,
+    "Borse": 25,
+    "Zaini donna": 25,
+    "Pochette": 25,
+    "Portafogli donna": 25,
+    "Cinture donna": 25,
+    "Cappelli donna": 25,
+    "Gioielli donna": 25,
+    "Sciarpe e scialli donna": 25,
+    "Occhiali da sole donna": 25,
+    "Orologi donna": 25,
+    "Vestiti uomo": 25,
+    "Giacche e cappotti uomo": 25,
+    "Camicie uomo": 25,
+    "T-shirt uomo": 25,
+    "Maglioni e pullover uomo": 25,
+    "Completi e blazer uomo": 25,
+    "Pantaloni uomo": 25,
+    "Jeans uomo": 25,
+    "Pantaloncini uomo": 25,
+    "Costumi da bagno uomo": 25,
+    "Abbigliamento sportivo uomo": 25,
+    "Scarpe uomo": 25,
+    "Stivali uomo": 25,
+    "Sneakers uomo": 25,
+    "Scarpe formali": 25,
+    "Cinture uomo": 25,
+    "Cappelli uomo": 25,
+    "Gioielli uomo": 25,
+    "Cravatte e papillon": 25,
+    "Orologi uomo": 25,
+    "Occhiali da sole uomo": 25,
+    "Abbigliamento bambina": 25,
+    "Abbigliamento bambino": 25,
+    "Scarpe bambini": 25,
+    "Articoli griffati": 25,
+    "Borse griffate": 25,
+    "Scarpe griffate": 25,
+    # Bellezza
+    "Make-up": 25,
+    "Profumi": 25,
+    "Cura del viso": 25,
+    "Cura del corpo": 25,
+    # Bambini (non-abbigliamento)
+    "Giocattoli": 14,
+    "Peluche": 14,
+    "Costruzioni": 14,
+    "Bambole": 14,
+    "Passeggini e carrozzine": 14,
+    "Seggiolini auto": 14,
+    "Arredamento bambini": 14,
+    # Sport
+    "Ciclismo": 32,
+    "Fitness e palestra": 32,
+    "Corsa": 32,
+    "Yoga e pilates": 32,
+    "Campeggio": 32,
+    "Arrampicata": 32,
+    "Pesca": 32,
+    "Nuoto": 32,
+    "Surf e SUP": 32,
+    "Calcio": 32,
+    "Basket": 32,
+    "Pallavolo": 32,
+    "Tennis": 32,
+    "Padel": 32,
+    "Golf": 32,
+    "Equitazione": 32,
+    "Skateboard": 32,
+    "Boxe e arti marziali": 32,
+    "Sci": 32,
+    "Snowboard": 32,
+    "Pattinaggio": 32,
+    # Hobby e collezionismo
+    "Carte collezionabili": 32,
+    "Giochi da tavolo": 32,
+    "Puzzle": 32,
+    "Monete e banconote": 32,
+    "Francobolli": 32,
+    "Arte e artigianato": 32,
+    # Intrattenimento
+    "Libri": 19,
+    "Narrativa": 19,
+    "Saggistica": 19,
+    "Fumetti e manga": 19,
+    "Riviste": 19,
+    "Musica": 20,
+    "Vinile": 20,
+    "CD": 20,
+    "DVD e Blu-ray": 20,
+    "Strumenti musicali": 20,
+    "Chitarre": 20,
+    # Veicoli
+    "Auto": 101,
+    "Moto": 102,
+    "Ricambi auto": 101,
 }
+# Build a case-insensitive lookup (the publish code lowercases the input)
+_CATEGORY_MAP_LOWER: dict[str, int] = {k.lower(): v for k, v in CATEGORY_MAP.items()}
 DEFAULT_CATEGORY = 14
 
 # ── Condition map ─────────────────────────────────────────────────────────────
@@ -141,7 +291,7 @@ class SubitoProvider(SeleniumProvider):
         condition   = CONDITION_MAP.get(
                           str(article.get("condition", "")).strip().lower(),
                           DEFAULT_CONDITION)
-        category_id = CATEGORY_MAP.get(
+        category_id = _CATEGORY_MAP_LOWER.get(
                           str(article.get("category", "")).strip().lower(),
                           DEFAULT_CATEGORY)
 
@@ -152,8 +302,16 @@ class SubitoProvider(SeleniumProvider):
             f"&subject={urllib.parse.quote(title)}"
             f"&from=vendere"
         )
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.ID, "price")))
+        try:
+            WebDriverWait(driver, 25).until(
+                lambda d: d.find_elements(By.ID, "price")
+                or d.find_elements(By.CSS_SELECTOR, "textarea")
+            )
+        except TimeoutException as e:
+            raise RuntimeError(
+                "Subito form non caricato in tempo (price/textarea assenti). "
+                f"URL attuale: {driver.current_url}"
+            ) from e
         time.sleep(0.4)
 
         # 2. Close modal + show file input

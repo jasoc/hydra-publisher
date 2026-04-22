@@ -195,6 +195,12 @@ See **`docs/selenium-selectors.md`** for the recommended approach to discovering
 - Manual login is triggered from **Settings** via per-provider buttons that only open/reuse the Selenium Chrome session with the Hydra persistent profile.
 - Python server endpoint `POST /<provider>/login` is now session-opening only (`{"status":"ready"}`), not a credential workflow.
 
+## Vinted publish flow updates (2026-04)
+
+- Vinted form fields are dynamic by category/type; provider logic must detect optional fields (`brand`, `condition`, `color`, `size`) and fill only those present.
+- Brand selection policy: after typing the brand in the popup search, always click the **last** available option (this covers the fallback action like "crea articolo con brand ...").
+- Size policy: when `Taglia` is present, open the popup, count available `size-*` options and select the middle item.
+
 ## Data reset behavior (2026-04)
 
 - A new Settings action clears all app data: local catalog copies, publish records, in-memory queues/counters, and settings.

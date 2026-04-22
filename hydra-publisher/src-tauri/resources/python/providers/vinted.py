@@ -20,6 +20,7 @@ import time
 from typing import Any
 
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -39,216 +40,188 @@ BASE_URL = "https://www.vinted.it"
 SELL_URL = f"{BASE_URL}/items/new"
 
 # Mappa condizione articolo → label Vinted (aggiorna se cambiano le opzioni)
-CONDITION_MAP: dict[str, str] = {
-    "nuovo":              "Nuovo con cartellino",
-    "new":                "Nuovo con cartellino",
-    "come nuovo":         "Nuovo senza cartellino",
-    "like new":           "Nuovo senza cartellino",
-    "usato - come nuovo": "Nuovo senza cartellino",
-    "ottimo":             "Ottimo stato",
-    "usato - ottimo":     "Ottimo stato",
-    "buono":              "Buono stato",
-    "usato - buono":      "Buono stato",
-    "usato":              "Buono stato",
+# Mappa condizione app → data-testid Vinted nel dialog condizione.
+# I valori sono gli ID nel DOM: condition-6 = Nuovo con cartellino,
+# condition-1 = Nuovo senza cartellino, condition-2 = Ottime,
+# condition-3 = Buone, condition-4 = Discrete.
+CONDITION_TESTID: dict[str, str] = {
+    "nuovo":                "condition-6",
+    "usato - come nuovo":   "condition-1",
+    "usato - buono":        "condition-2",
+    "usato - accettabile":  "condition-3",
 }
-DEFAULT_CONDITION = "Buono stato"
+DEFAULT_CONDITION_TESTID = "condition-2"
 
-# Mappa categoria app → termine di ricerca Vinted.
+# Mappa categoria app (da categories.model.ts) → termine di ricerca Vinted.
 # Il metodo _select_category digita il termine nel campo di ricerca del
 # dropdown categorie e clicca il primo risultato.
-# Chiavi: normalizzate lowercase. Valori: stringa esatta da cercare nel
+# Chiavi: stringa esatta dal modello app. Valori: stringa da cercare nel
 # catalogo Vinted (deve restituire la categoria giusta come primo risultato).
 CATEGORY_MAP: dict[str, str] = {
-    # ── Donna ─────────────────────────────────────────────────────────────
-    "abbigliamento donna":          "Vestiti",              # Donna > Vestiti
-    "vestiti donna":                "Vestiti",
-    "giacche donna":                "Abbigliamento da esterno",
-    "cappotti donna":               "Abbigliamento da esterno",
-    "maglioni donna":               "Maglioni e pullover",
-    "abiti donna":                  "Abiti",
-    "gonne":                        "Gonne",
-    "top donna":                    "Top e t-shirt",
-    "t-shirt donna":                "Top e t-shirt",
-    "jeans donna":                  "Jeans",
-    "pantaloni donna":              "Pantaloni e leggings",
-    "pantaloncini donna":           "Pantaloncini e pantaloni corti",
-    "costumi donna":                "Costumi da bagno",
-    "lingerie":                     "Lingerie e indumenti da notte",
-    "abbigliamento sportivo donna": "Abbigliamento sportivo",
-    "scarpe donna":                 "Scarpe",               # Donna > Scarpe
-    "stivali donna":                "Stivali",
-    "sandali donna":                "Sandali",
-    "tacchi":                       "Scarpe con tacchi alti",
-    "sneakers donna":               "Scarpe da ginnastica",
-    "borse":                        "Borse",                # Donna > Borse
-    "zaini donna":                  "Zaini",
-    "pochette":                     "Pochette",
-    "portafogli donna":             "Portafogli",
-    "accessori donna":              "Accessori",            # Donna > Accessori
-    "cinture donna":                "Cinture",
-    "cappelli donna":               "Cappelli e berretti",
-    "gioielli donna":               "Gioielli",
-    "sciarpe donna":                "Sciarpe e scialli",
-    "occhiali da sole donna":       "Occhiali da sole",
-    "orologi donna":                "Orologi",
-    "bellezza":                     "Bellezza",             # Donna > Bellezza
-    "make-up":                      "Make-up",
-    "profumi":                      "Profumi",
-    "cura viso":                    "Cura del viso",
-
-    # ── Uomo ──────────────────────────────────────────────────────────────
-    "abbigliamento uomo":           "Vestiti",              # Uomo > Vestiti
-    "vestiti uomo":                 "Vestiti",
-    "giacche uomo":                 "Abbigliamento da esterno",
-    "cappotti uomo":                "Abbigliamento da esterno",
-    "camicie uomo":                 "Camicie e t-shirt",
-    "t-shirt uomo":                 "Camicie e t-shirt",
-    "maglioni uomo":                "Maglioni e pullover",
-    "completi uomo":                "Completi e blazer",
-    "pantaloni uomo":               "Pantaloni",
-    "jeans uomo":                   "Jeans",
-    "pantaloncini uomo":            "Pantaloncini",
-    "costumi uomo":                 "Costumi da bagno",
-    "abbigliamento sportivo uomo":  "Abbigliamento sportivo",
-    "scarpe uomo":                  "Scarpe",               # Uomo > Scarpe
-    "stivali uomo":                 "Stivali",
-    "sneakers uomo":                "Scarpe da ginnastica",
-    "scarpe formali":               "Scarpe formali",
-    "accessori uomo":               "Accessori",            # Uomo > Accessori
-    "cinture uomo":                 "Cinture",
-    "cappelli uomo":                "Cappelli e berretti",
-    "gioielli uomo":                "Gioielli",
-    "cravatte":                     "Cravatte e papillon",
-    "orologi uomo":                 "Orologi",
-    "occhiali da sole uomo":        "Occhiali da sole",
-
-    # ── Bambini ───────────────────────────────────────────────────────────
-    "bambini":                      "Bambini",
-    "abbigliamento bambina":        "Abbigliamento bambina",
-    "abbigliamento bambino":        "Abbigliamento bambino",
-    "giocattoli":                   "Giocattoli",
-    "peluche":                      "Peluche",
-    "costruzioni":                  "Costruzioni e blocchetti",
-    "bambole":                      "Bambole e accessori",
-    "passeggini":                   "Passeggini e carrozzine",
-    "seggiolini auto":              "Seggiolini auto",
-    "arredamento bambini":          "Arredamento e decorazioni",
-
-    # ── Casa ──────────────────────────────────────────────────────────────
-    "casa":                         "Casa",
-    "arredamento":                  "Accessori per la casa",
-    "elettrodomestici cucina":      "Piccoli elettrodomestici da cucina",
-    "pentole e padelle":            "Pentole",
-    "utensili cucina":              "Utensili da cucina",
-    "stoviglie":                    "Stoviglie",
-    "biancheria letto":             "Biancheria da letto",
-    "tende":                        "Tende e tapparelle",
-    "tappeti":                      "Tappeti e tappetini",
-    "candele":                      "Candele e profumi per la casa",
-    "illuminazione":                "Illuminazione",
-    "cornici":                      "Cornici per foto e quadri",
-    "specchi":                      "Specchi",
-    "vasi":                         "Vasi",
-    "decorazioni parete":           "Decorazioni da parete",
-    "materiale ufficio":            "Materiale per ufficio",
-    "attrezzi":                     "Attrezzi e bricolage",
-    "giardino":                     "Esterni e giardino",
-    "animali":                      "Animali",
-
-    # ── Elettronica ───────────────────────────────────────────────────────
-    "elettronica":                  "Elettronica",
-    "videogiochi":                  "Videogiochi e console",
-    "console":                      "Console",
-    "computer":                     "Computer e accessori",
-    "portatili":                    "Computer portatili",
-    "laptop":                       "Computer portatili",
-    "desktop":                      "Computer desktop",
-    "componenti pc":                "Parti e componenti del computer",
-    "tastiere":                     "Tastiere e accessori",
-    "mouse":                        "Mouse",
-    "monitor":                      "Monitor e accessori",
-    "stampanti":                    "Stampanti e accessori",
-    "telefoni":                     "Telefoni cellulari",
-    "cellulari":                    "Telefoni cellulari",
-    "smartphone":                   "Telefoni cellulari",
-    "accessori telefono":           "Parti e accessori per telefoni cellulari",
-    "cover telefono":               "Parti e accessori per telefoni cellulari",
-    "cuffie":                       "Cuffie e auricolari",
-    "auricolari":                   "Cuffie e auricolari",
-    "altoparlanti":                 "Altoparlanti portatili",
-    "speaker":                      "Altoparlanti portatili",
-    "audio":                        "Audio, cuffie e hi-fi",
-    "fotocamere":                   "Fotocamere",
-    "obiettivi":                    "Obiettivi",
-    "tablet":                       "Tablet",
-    "e-reader":                     "e-Reader",
-    "televisori":                   "Televisori",
-    "tv":                           "Televisori",
-    "proiettori":                   "Proiettori",
-    "smartwatch":                   "Smartwatch",
-    "fitness tracker":              "Fitness tracker",
-    "caricabatterie":               "Caricabatterie",
-    "power bank":                   "Power bank",
-    "cavi":                         "Cavi",
-
-    # ── Intrattenimento ───────────────────────────────────────────────────
-    "intrattenimento":              "Intrattenimento",
-    "libri":                        "Libri",
-    "narrativa":                    "Narrativa",
-    "saggistica":                   "Saggistica",
-    "fumetti":                      "Fumetti, manga e graphic novel",
-    "manga":                        "Fumetti, manga e graphic novel",
-    "riviste":                      "Riviste",
-    "musica":                       "Musica",
-    "vinile":                       "Dischi in vinile",
-    "cd":                           "CD",
-    "dvd":                          "DVD",
-    "blu-ray":                      "Blu-ray",
-
-    # ── Hobby e collezionismo ─────────────────────────────────────────────
-    "hobby":                        "Hobby e collezionismo",
-    "collezionismo":                "Hobby e collezionismo",
-    "carte collezionabili":         "Carte collezionabili",
-    "giochi da tavolo":             "Giochi da tavolo",
-    "puzzle":                       "Puzzle",
-    "monete":                       "Monete e banconote",
-    "francobolli":                  "Francobolli",
-    "strumenti musicali":           "Strumenti e attrezzature musicali",
-    "chitarre":                     "Chitarre e bassi",
-    "cucito":                       "Cucito, lavoro a maglia e ricamo",
-    "pittura":                      "Pittura",
-
-    # ── Sport ─────────────────────────────────────────────────────────────
-    "sport":                        "Sport",
-    "ciclismo":                     "Ciclismo",
-    "biciclette":                   "Biciclette per bambini",
-    "fitness":                      "Fitness, corsa e yoga",
-    "corsa":                        "Corsa",
-    "yoga":                         "Attrezzature per yoga e pilates",
-    "campeggio":                    "Tende da campeggio e attrezzatura per dormire",
-    "arrampicata":                  "Arrampicata e bouldering",
-    "pesca":                        "Pesca e caccia",
-    "nuoto":                        "Nuoto",
-    "surf":                         "Tavole da SUP",
-    "calcio":                       "Calcio",
-    "basket":                       "Pallacanestro",
-    "pallavolo":                    "Pallavolo",
-    "tennis":                       "Tennis",
-    "padel":                        "Padel",
-    "golf":                         "Golf",
-    "equitazione":                  "Equitazione",
-    "skateboard":                   "Skateboard",
-    "boxe":                         "Boxe e arti marziali",
-    "sci":                          "Attrezzature da sci",
-    "snowboard":                    "Attrezzatura da snowboar",
-    "pattinaggio":                  "Accessori per pattinaggio di figura",
-
-    # ── Articoli griffati ─────────────────────────────────────────────────
-    "griffato":                     "Articoli griffati",
-    "lusso":                        "Articoli griffati",
-    "designer":                     "Articoli griffati",
-    "borse griffate":               "Borse griffate",
-    "scarpe griffate":              "Scarpe griffate",
+    # ── Abbigliamento donna ───────────────────────────────────────────
+    "Vestiti donna":                "Vestiti",
+    "Giacche e cappotti donna":     "Abbigliamento da esterno",
+    "Maglioni e pullover donna":    "Maglioni e pullover",
+    "Abiti donna":                  "Abiti",
+    "Gonne":                        "Gonne",
+    "Top e t-shirt donna":          "Top e t-shirt",
+    "Jeans donna":                  "Jeans",
+    "Pantaloni donna":              "Pantaloni e leggings",
+    "Pantaloncini donna":           "Pantaloncini e pantaloni corti",
+    "Costumi da bagno donna":       "Costumi da bagno",
+    "Lingerie e pigiami":           "Lingerie e indumenti da notte",
+    "Abbigliamento sportivo donna": "Abbigliamento sportivo",
+    # ── Scarpe donna ──────────────────────────────────────────────────
+    "Scarpe donna":                 "Scarpe",
+    "Stivali donna":                "Stivali",
+    "Sandali donna":                "Sandali",
+    "Tacchi":                       "Scarpe con tacchi alti",
+    "Sneakers donna":               "Scarpe da ginnastica",
+    # ── Borse e accessori donna ───────────────────────────────────────
+    "Borse":                        "Borse",
+    "Zaini donna":                  "Zaini",
+    "Pochette":                     "Pochette",
+    "Portafogli donna":             "Portafogli",
+    "Cinture donna":                "Cinture",
+    "Cappelli donna":               "Cappelli e berretti",
+    "Gioielli donna":               "Gioielli",
+    "Sciarpe e scialli donna":      "Sciarpe e scialli",
+    "Occhiali da sole donna":       "Occhiali da sole",
+    "Orologi donna":                "Orologi",
+    # ── Bellezza ──────────────────────────────────────────────────────
+    "Make-up":                      "Make-up",
+    "Profumi":                      "Profumi",
+    "Cura del viso":                "Cura del viso",
+    "Cura del corpo":               "Cura del corpo",
+    # ── Abbigliamento uomo ────────────────────────────────────────────
+    "Vestiti uomo":                 "Vestiti",
+    "Giacche e cappotti uomo":      "Abbigliamento da esterno",
+    "Camicie uomo":                 "Camicie e t-shirt",
+    "T-shirt uomo":                 "Camicie e t-shirt",
+    "Maglioni e pullover uomo":     "Maglioni e pullover",
+    "Completi e blazer uomo":       "Completi e blazer",
+    "Pantaloni uomo":               "Pantaloni",
+    "Jeans uomo":                   "Jeans",
+    "Pantaloncini uomo":            "Pantaloncini",
+    "Costumi da bagno uomo":        "Costumi da bagno",
+    "Abbigliamento sportivo uomo":  "Abbigliamento sportivo",
+    # ── Scarpe uomo ───────────────────────────────────────────────────
+    "Scarpe uomo":                  "Scarpe",
+    "Stivali uomo":                 "Stivali",
+    "Sneakers uomo":                "Scarpe da ginnastica",
+    "Scarpe formali":               "Scarpe formali",
+    # ── Accessori uomo ────────────────────────────────────────────────
+    "Cinture uomo":                 "Cinture",
+    "Cappelli uomo":                "Cappelli e berretti",
+    "Gioielli uomo":                "Gioielli",
+    "Cravatte e papillon":          "Cravatte e papillon",
+    "Orologi uomo":                 "Orologi",
+    "Occhiali da sole uomo":        "Occhiali da sole",
+    # ── Bambini ───────────────────────────────────────────────────────
+    "Abbigliamento bambina":        "Abbigliamento bambina",
+    "Abbigliamento bambino":        "Abbigliamento bambino",
+    "Scarpe bambini":               "Scarpe",
+    "Giocattoli":                   "Giocattoli",
+    "Peluche":                      "Peluche",
+    "Costruzioni":                  "Costruzioni e blocchetti",
+    "Bambole":                      "Bambole e accessori",
+    "Passeggini e carrozzine":      "Passeggini e carrozzine",
+    "Seggiolini auto":              "Seggiolini auto",
+    "Arredamento bambini":          "Arredamento e decorazioni",
+    # ── Casa e cucina ─────────────────────────────────────────────────
+    "Arredamento":                  "Accessori per la casa",
+    "Elettrodomestici cucina":      "Piccoli elettrodomestici da cucina",
+    "Pentole e padelle":            "Pentole",
+    "Utensili cucina":              "Utensili da cucina",
+    "Stoviglie":                    "Stoviglie",
+    "Biancheria letto":             "Biancheria da letto",
+    "Tende e tapparelle":           "Tende e tapparelle",
+    "Tappeti":                      "Tappeti e tappetini",
+    "Candele e profumi casa":       "Candele e profumi per la casa",
+    "Illuminazione":                "Illuminazione",
+    "Cornici":                      "Cornici per foto e quadri",
+    "Specchi":                      "Specchi",
+    "Vasi":                         "Vasi",
+    "Decorazioni parete":           "Decorazioni da parete",
+    # ── Ufficio e casa ────────────────────────────────────────────────
+    "Materiale ufficio":            "Materiale per ufficio",
+    "Attrezzi e bricolage":         "Attrezzi e bricolage",
+    "Giardino":                     "Esterni e giardino",
+    "Animali":                      "Animali",
+    # ── Elettronica ───────────────────────────────────────────────────
+    "Videogiochi e console":        "Videogiochi e console",
+    "Console":                      "Console",
+    "Computer portatili":           "Computer portatili",
+    "Computer desktop":             "Computer desktop",
+    "Componenti PC":                "Parti e componenti del computer",
+    "Tastiere":                     "Tastiere e accessori",
+    "Mouse":                        "Mouse",
+    "Monitor":                      "Monitor e accessori",
+    "Stampanti":                    "Stampanti e accessori",
+    "Smartphone":                   "Telefoni cellulari",
+    "Accessori telefono":           "Parti e accessori per telefoni cellulari",
+    "Cuffie e auricolari":          "Cuffie e auricolari",
+    "Altoparlanti e speaker":       "Altoparlanti portatili",
+    "Audio e hi-fi":                "Audio, cuffie e hi-fi",
+    "Fotocamere":                   "Fotocamere",
+    "Obiettivi":                    "Obiettivi",
+    "Tablet":                       "Tablet",
+    "E-reader":                     "e-Reader",
+    "Televisori":                   "Televisori",
+    "Proiettori":                   "Proiettori",
+    "Smartwatch":                   "Smartwatch",
+    "Fitness tracker":              "Fitness tracker",
+    "Caricabatterie e power bank":  "Caricabatterie",
+    "Cavi e adattatori":            "Cavi",
+    # ── Intrattenimento ───────────────────────────────────────────────
+    "Libri":                        "Libri",
+    "Narrativa":                    "Narrativa",
+    "Saggistica":                   "Saggistica",
+    "Fumetti e manga":              "Fumetti, manga e graphic novel",
+    "Riviste":                      "Riviste",
+    "Musica":                       "Musica",
+    "Vinile":                       "Dischi in vinile",
+    "CD":                           "CD",
+    "DVD e Blu-ray":                "DVD",
+    # ── Hobby e collezionismo ─────────────────────────────────────────
+    "Carte collezionabili":         "Carte collezionabili",
+    "Giochi da tavolo":             "Giochi da tavolo",
+    "Puzzle":                       "Puzzle",
+    "Monete e banconote":           "Monete e banconote",
+    "Francobolli":                  "Francobolli",
+    "Strumenti musicali":           "Strumenti e attrezzature musicali",
+    "Chitarre":                     "Chitarre e bassi",
+    "Arte e artigianato":           "Arte e creatività",
+    # ── Sport ─────────────────────────────────────────────────────────
+    "Ciclismo":                     "Ciclismo",
+    "Fitness e palestra":           "Fitness, corsa e yoga",
+    "Corsa":                        "Corsa",
+    "Yoga e pilates":               "Attrezzature per yoga e pilates",
+    "Campeggio":                    "Tende da campeggio e attrezzatura per dormire",
+    "Arrampicata":                  "Arrampicata e bouldering",
+    "Pesca":                        "Pesca e caccia",
+    "Nuoto":                        "Nuoto",
+    "Surf e SUP":                   "Tavole da SUP",
+    "Calcio":                       "Calcio",
+    "Basket":                       "Pallacanestro",
+    "Pallavolo":                    "Pallavolo",
+    "Tennis":                       "Tennis",
+    "Padel":                        "Padel",
+    "Golf":                         "Golf",
+    "Equitazione":                  "Equitazione",
+    "Skateboard":                   "Skateboard",
+    "Boxe e arti marziali":         "Boxe e arti marziali",
+    "Sci":                          "Attrezzature da sci",
+    "Snowboard":                    "Attrezzatura da snowboard",
+    "Pattinaggio":                  "Accessori per pattinaggio di figura",
+    # ── Articoli griffati ─────────────────────────────────────────────
+    "Articoli griffati":            "Articoli griffati",
+    "Borse griffate":               "Borse griffate",
+    "Scarpe griffate":              "Scarpe griffate",
+    # ── Veicoli e altro ───────────────────────────────────────────────
+    "Auto":                         "Auto",
+    "Moto":                         "Moto",
+    "Ricambi auto":                 "Auto",
 }
 
 
@@ -267,6 +240,26 @@ class VintedProvider(SeleniumProvider):
 
     def _wait(self, driver: Any, timeout: int = 15) -> WebDriverWait:
         return WebDriverWait(driver, timeout)
+
+    def _field_present(self, driver: Any, field_id: str, timeout: float = 2.5) -> bool:
+        """Rileva se un campo input/select con id specifico è presente nel form."""
+        end = time.time() + timeout
+        while time.time() < end:
+            if driver.find_elements(By.ID, field_id):
+                return True
+            time.sleep(0.2)
+        return False
+
+    def _wait_optional_fields_after_category(self, driver: Any, timeout: float = 4.0) -> None:
+        """Dopo la categoria aspetta che eventuali campi dinamici vengano renderizzati."""
+        end = time.time() + timeout
+        dynamic_ids = ["brand", "condition", "color", "size"]
+        while time.time() < end:
+            if any(driver.find_elements(By.ID, field_id) for field_id in dynamic_ids):
+                # piccolo buffer per React re-render / clickability
+                time.sleep(0.6)
+                return
+            time.sleep(0.2)
 
     def _dismiss_cookie_banner(self, driver: Any) -> None:
         """Chiudi l'eventuale banner cookie / GDPR."""
@@ -347,8 +340,15 @@ class VintedProvider(SeleniumProvider):
         print(f"[Vinted] Descrizione: {desc[:40]}")
 
     def _fill_price(self, article: dict, driver: Any) -> None:
-        """Compila il campo prezzo. TODO: implementare."""
-        pass
+        """Compila il campo prezzo."""
+        price = article.get("price")
+        if price is None:
+            return
+        wait = self._wait(driver)
+        el = wait.until(EC.presence_of_element_located((By.ID, "price")))
+        el.clear()
+        el.send_keys(str(int(price)) if isinstance(price, float) and price == int(price) else str(price))
+        print(f"[Vinted] Prezzo: {price}")
 
     def _select_category(self, article: dict, driver: Any) -> None:
         """
@@ -357,16 +357,16 @@ class VintedProvider(SeleniumProvider):
         Flow:
         1. Clicca sull'input #category per aprire il dropdown
         2. Digita il termine di ricerca nel campo #catalog-search-input
-        3. Attende che appaiano i risultati ([role="button"])
-        4. Clicca il primo risultato
+        3. Attende che appaiano i risultati di ricerca (id="catalog-search-*-result")
+        4. Clicca il primo risultato (sono già categorie foglia con radio button)
         """
-        raw = article.get("category", "")
+        raw = (article.get("category") or "").strip()
         if not raw:
             print("[Vinted] Nessuna categoria, skip.")
             return
 
-        # Cerca nella mappa (case-insensitive)
-        search_term = CATEGORY_MAP.get(raw.lower().strip(), raw)
+        # Cerca nella mappa (exact match, le chiavi sono Title Case come nel modello app)
+        search_term = CATEGORY_MAP.get(raw) or raw
         wait = self._wait(driver)
 
         # 1. Apri il dropdown cliccando sull'input categoria
@@ -380,27 +380,251 @@ class VintedProvider(SeleniumProvider):
         )
         search_input.clear()
         search_input.send_keys(search_term)
-        time.sleep(1)  # attendi risultati filtrati
+        time.sleep(1.5)  # attendi risultati filtrati
 
-        # 3. Clicca il primo risultato
+        # 3. Clicca il primo risultato di ricerca
         results = driver.find_elements(
             By.CSS_SELECTOR,
-            ".category-scrollable-container [role='button']"
+            "[id^='catalog-search-'][id$='-result'][role='button']"
         )
         if results:
+            label = results[0].text.strip().split("\n")[0][:50]
             driver.execute_script("arguments[0].click();", results[0])
-            print(f"[Vinted] Categoria: '{search_term}' → cliccato primo risultato")
+            print(f"[Vinted] Categoria: '{search_term}' → '{label}'")
             time.sleep(0.5)
         else:
             print(f"[Vinted] Nessun risultato per categoria '{search_term}'")
 
     def _select_condition(self, article: dict, driver: Any) -> None:
-        """Seleziona la condizione. TODO: implementare."""
-        pass
+        """Seleziona la condizione tramite il dialog Vinted.
+
+        Flow:
+        1. Clicca #condition per aprire il dialog
+        2. Clicca l'elemento con data-testid corrispondente alla condizione
+        """
+        raw = (article.get("condition") or "").strip().lower()
+        testid = CONDITION_TESTID.get(raw, DEFAULT_CONDITION_TESTID)
+        wait = self._wait(driver)
+
+        # 1. Apri dialog
+        cond_btn = wait.until(EC.element_to_be_clickable((By.ID, "condition")))
+        cond_btn.click()
+        time.sleep(0.5)
+
+        # 2. Clicca l'opzione giusta
+        option = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, f"[data-testid='{testid}']"))
+        )
+        option.click()
+        print(f"[Vinted] Condizione: {raw or '(default)'} → {testid}")
+        time.sleep(0.5)
+
+    def _select_brand(self, article: dict, driver: Any) -> None:
+        """Seleziona il brand tramite il dropdown con ricerca.
+
+        Flow:
+        1. Clicca #brand per aprire il dropdown
+        2. Se brand vuoto → clicca #empty-brand e torna
+        3. Se brand valorizzato:
+           - Digita nel campo #brand-search-input (nativo event)
+           - Aspetta filtraggio DDL
+           - Controlla se appare il bottone "Utilizza X come brand" (#custom-select-brand)
+             * Se esiste e visibile → clickalo (permette brand personalizzato)
+             * Se non esiste → seleziona il PRIMO brand dalla lista
+        
+        Retry: Se brand è valorizzato, riprova fino a 3 volte in caso di fallimento.
+        """
+        brand = (article.get("brand") or "").strip()
+        wait = self._wait(driver)
+
+        # Se brand è vuoto, seleziona "Nessun brand" e torna (nessun retry)
+        if not brand:
+            try:
+                brand_btn = wait.until(EC.element_to_be_clickable((By.ID, "brand")))
+                brand_btn.click()
+                wait.until(EC.presence_of_element_located((By.ID, "brand-search-input")))
+                empty = wait.until(EC.element_to_be_clickable((By.ID, "empty-brand")))
+                driver.execute_script("arguments[0].click();", empty)
+                print("[Vinted] Brand: nessuno (empty-brand)")
+            except Exception as e:
+                print(f"[Vinted] Brand: skip (nessun brand, errore: {e})")
+            time.sleep(0.5)
+            return
+
+        # Brand valorizzato: retry fino a 3 volte
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                self._select_brand_attempt(article, driver, attempt, max_attempts)
+                return  # successo
+            except Exception as e:
+                if attempt < max_attempts:
+                    print(f"[Vinted] Brand tentativo {attempt}/{max_attempts} fallito: {e}, riprovo...")
+                    time.sleep(1)  # attesa prima di retry
+                else:
+                    print(f"[Vinted] Brand: fallito dopo {max_attempts} tentativi")
+                    raise RuntimeError(f"Impossibile selezionare brand '{brand}' dopo {max_attempts} tentativi: {e}")
+
+    def _select_brand_attempt(self, article: dict, driver: Any, attempt: int, max_attempts: int) -> None:
+        """Tentativo singolo di selezione brand (usato internamente con retry)."""
+        brand = article.get("brand", "").strip()
+        wait = self._wait(driver)
+
+        # 1. Apri dropdown brand
+        brand_btn = wait.until(EC.element_to_be_clickable((By.ID, "brand")))
+        brand_btn.click()
+        
+        # Aspetta che il dropdown si apra (ricerca diventa visibile)
+        wait.until(EC.presence_of_element_located((By.ID, "brand-search-input")))
+
+        # 2. Riempi il campo di ricerca
+        search_input = wait.until(
+            EC.presence_of_element_located((By.ID, "brand-search-input"))
+        )
+        search_input.clear()
+        search_input.send_keys(brand)
+        time.sleep(1.5)  # attendi filtraggio DOM
+
+        # 3. Aspetta che il custom brand appaia (max 3s)
+        custom_appeared = False
+        try:
+            WebDriverWait(driver, 3).until(
+                lambda d: d.find_element(By.ID, "custom-select-brand").is_displayed()
+            )
+            custom_appeared = True
+        except Exception:
+            pass
+
+        if custom_appeared:
+            # Bottone custom brand è disponibile → usalo
+            custom_btn = driver.find_element(By.ID, "custom-select-brand")
+            label = custom_btn.text.strip()[:80]
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", custom_btn)
+            driver.execute_script("arguments[0].click();", custom_btn)
+            print(f"[Vinted] Brand: '{brand}' → custom brand '{label}' (tentativo {attempt}/{max_attempts})")
+            time.sleep(0.5)
+            return
+
+        # 4. Se custom brand non appare, seleziona il PRIMO brand dalla lista filtrata
+        all_buttons = driver.find_elements(
+            By.CSS_SELECTOR,
+            "div[id^='brand-'][role='button'], div[id^='suggested-brand-'][role='button']"
+        )
+        visible_buttons = [el for el in all_buttons if el.is_displayed()]
+
+        if visible_buttons:
+            # Clicca il PRIMO bottone
+            target = visible_buttons[0]
+            label = target.text.strip()[:80]
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target)
+            driver.execute_script("arguments[0].click();", target)
+            print(f"[Vinted] Brand: '{brand}' → primo risultato filtrato '{label}' (tentativo {attempt}/{max_attempts})")
+        else:
+            # Nessun risultato → fallback a empty-brand
+            try:
+                empty = wait.until(EC.element_to_be_clickable((By.ID, "empty-brand")))
+                driver.execute_script("arguments[0].click();", empty)
+                print(f"[Vinted] Brand: '{brand}' non trovato, fallback empty-brand (tentativo {attempt}/{max_attempts})")
+            except Exception:
+                raise RuntimeError(f"Brand '{brand}': nessuna opzione disponibile e empty-brand non trovato")
+        time.sleep(0.5)
+
+    def _select_size_middle(self, driver: Any) -> None:
+        """Seleziona la taglia scegliendo l'opzione centrale disponibile nel popup."""
+        wait = self._wait(driver)
+
+        # 1. Apri dialog taglia
+        size_btn = wait.until(EC.element_to_be_clickable((By.ID, "size")))
+        size_btn.click()
+        time.sleep(0.5)
+
+        # 2. Raccogli opzioni disponibili e clicca quella centrale
+        try:
+            wait.until(
+                lambda d: len([
+                    el for el in d.find_elements(By.CSS_SELECTOR, "[id^='size-'][role='button']")
+                    if el.is_displayed()
+                ]) > 0
+            )
+        except Exception:
+            pass
+
+        options = [
+            el for el in driver.find_elements(By.CSS_SELECTOR, "[id^='size-'][role='button']")
+            if el.is_displayed()
+        ]
+        if not options:
+            print("[Vinted] Taglia: nessuna opzione trovata")
+            return
+
+        mid_idx = len(options) // 2
+        target = options[mid_idx]
+        label = target.text.strip().split("\n")[0][:50]
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target)
+        driver.execute_script("arguments[0].click();", target)
+        print(f"[Vinted] Taglia: selezionata opzione centrale ({mid_idx + 1}/{len(options)}) '{label}'")
+        time.sleep(0.5)
+
+    def _select_colors(self, article: dict, driver: Any) -> None:
+        """Seleziona i colori hardcoded: Grigio (color-3) + Cachi (color-16).
+
+        Flow:
+        1. Clicca #color per aprire il dialog
+        2. Clicca [data-testid='color-3'] (Grigio)
+        3. Clicca [data-testid='color-16'] (Cachi)
+        4. Chiudi il popup per applicare i colori
+        """
+        wait = self._wait(driver)
+
+        # 1. Apri dialog colori
+        color_btn = wait.until(EC.element_to_be_clickable((By.ID, "color")))
+        color_btn.click()
+        time.sleep(0.5)
+
+        # 2. Seleziona Grigio
+        try:
+            grigio = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='color-3']"))
+            )
+            grigio.click()
+            print("[Vinted] Colore: Grigio (color-3)")
+        except Exception:
+            print("[Vinted] Colore Grigio non trovato")
+
+        # 3. Seleziona Cachi
+        try:
+            cachi = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='color-16']"))
+            )
+            cachi.click()
+            print("[Vinted] Colore: Cachi (color-16)")
+        except Exception:
+            print("[Vinted] Colore Cachi non trovato")
+
+        time.sleep(0.5)
+        
+        # 4. Chiudi il popup premendo Escape per applicare i colori
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+        time.sleep(0.5)
+        print("[Vinted] Popup colori chiuso")
 
     def _submit(self, driver: Any) -> None:
-        """Clicca il pulsante di pubblicazione. TODO: implementare."""
-        pass
+        """Clicca il pulsante 'Carica' per pubblicare l'annuncio."""
+        wait = self._wait(driver)
+        
+        # Aspetta che il bottone "Carica" sia abilitato (non disabilitato)
+        try:
+            submit_btn = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='upload-form-save-button']"))
+            )
+            # Ulteriore attesa per assicurare che il form sia completamente pronto
+            time.sleep(1)
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submit_btn)
+            driver.execute_script("arguments[0].click();", submit_btn)
+            print("[Vinted] Click su bottone 'Carica'")
+            time.sleep(2)  # attendi redirect
+        except Exception as e:
+            raise RuntimeError(f"Vinted submit fallito: {e}")
 
     # ── Publish ───────────────────────────────────────────────────────────────
 
@@ -420,8 +644,6 @@ class VintedProvider(SeleniumProvider):
 
         print("[Vinted] Navigato a pagina vendita, pronto per compilare form.")
 
-        
-
         # 0.1 Chiudi eventuali overlay
         self._dismiss_cookie_banner(driver)
 
@@ -437,8 +659,29 @@ class VintedProvider(SeleniumProvider):
         # 4. Categoria
         self._select_category(article, driver)
 
-        # 5. Condizione
-        self._select_condition(article, driver)
+        # 4.1 I campi extra appaiono dinamicamente dopo la categoria.
+        self._wait_optional_fields_after_category(driver)
+
+        # 5. Campi dinamici: compila solo quelli presenti nel form corrente.
+        if self._field_present(driver, "brand"):
+            self._select_brand(article, driver)
+        else:
+            print("[Vinted] Campo brand non presente, skip")
+
+        if self._field_present(driver, "condition"):
+            self._select_condition(article, driver)
+        else:
+            print("[Vinted] Campo condition non presente, skip")
+
+        if self._field_present(driver, "color"):
+            self._select_colors(article, driver)
+        else:
+            print("[Vinted] Campo color non presente, skip")
+
+        if self._field_present(driver, "size"):
+            self._select_size_middle(driver)
+        else:
+            print("[Vinted] Campo size non presente, skip")
 
         # 6. Prezzo
         self._fill_price(article, driver)

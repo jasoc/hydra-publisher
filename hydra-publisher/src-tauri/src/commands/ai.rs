@@ -56,8 +56,9 @@ pub async fn start_ai_fill(
                     let needs_price = manifest.price.is_none() || manifest.price == Some(0.0);
                     let needs_category = manifest.category.as_ref().map_or(true, |c| c.is_empty());
                     let needs_condition = manifest.condition.as_ref().map_or(true, |c| c.is_empty());
+                    let needs_brand = manifest.brand.as_ref().map_or(true, |b| b.trim().is_empty());
 
-                    if needs_name || needs_desc || needs_price || needs_category || needs_condition {
+                    if needs_name || needs_desc || needs_price || needs_category || needs_condition || needs_brand {
                         articles_to_process.push((manifest, path.to_string_lossy().to_string()));
                     }
                 }
@@ -86,6 +87,9 @@ pub async fn start_ai_fill(
         }
         if manifest.condition.as_ref().map_or(true, |c| c.is_empty()) {
             missing.push("condition");
+        }
+        if manifest.brand.as_ref().map_or(true, |b| b.is_empty()) {
+            missing.push("brand");
         }
 
         let description = format!(
@@ -194,6 +198,8 @@ async fn process_ai_request(
     let needs_category = manifest.category.as_ref().map_or(true, |c| c.is_empty());
     let needs_condition = manifest.condition.as_ref().map_or(true, |c| c.is_empty());
 
+    let needs_brand = manifest.brand.as_ref().map_or(true, |b| b.trim().is_empty());
+
     let language_name = match settings.language.as_str() {
         "it" => "Italian",
         "fr" => "French",
@@ -206,27 +212,65 @@ async fn process_ai_request(
     let prompt = format!(
         "You are helping list a used item for sale on an online marketplace. \
          Look at the photos and provide the following fields that are currently missing: \
-         {}{}{}{}{}. \
+         {}{}{}{}{}{}. \
          Respond in {}. \
          For \"category\", pick EXACTLY one from this list: \
-         [\"Attrezzi\", \"Arredamento\", \"Articoli per la casa\", \"Giardino\", \"Elettrodomestici\", \
-         \"Videogiochi\", \"Libri, film e musica\", \"Borse e valigie\", \
-         \"Abbigliamento e scarpe da donna\", \"Abbigliamento e scarpe da uomo\", \
-         \"Gioielli e accessori\", \"Salute e bellezza\", \"Articoli per animali\", \
-         \"Neonati e bambini\", \"Giocattoli e videogiochi\", \"Elettronica e computer\", \
-         \"Cellulari\", \"Biciclette\", \"Arte e artigianato\", \
-         \"Sport e attività all'aperto\", \"Ricambi auto\", \"Strumenti musicali\", \
-         \"Articoli d'antiquariato e da collezione\", \"Mercatino dell'usato\", \"Varie\", \"Veicoli\"]. \
+         [\"Vestiti donna\", \"Giacche e cappotti donna\", \"Maglioni e pullover donna\", \
+         \"Abiti donna\", \"Gonne\", \"Top e t-shirt donna\", \"Jeans donna\", \
+         \"Pantaloni donna\", \"Pantaloncini donna\", \"Costumi da bagno donna\", \
+         \"Lingerie e pigiami\", \"Abbigliamento sportivo donna\", \
+         \"Scarpe donna\", \"Stivali donna\", \"Sandali donna\", \"Tacchi\", \"Sneakers donna\", \
+         \"Borse\", \"Zaini donna\", \"Pochette\", \"Portafogli donna\", \"Cinture donna\", \
+         \"Cappelli donna\", \"Gioielli donna\", \"Sciarpe e scialli donna\", \
+         \"Occhiali da sole donna\", \"Orologi donna\", \
+         \"Make-up\", \"Profumi\", \"Cura del viso\", \"Cura del corpo\", \
+         \"Vestiti uomo\", \"Giacche e cappotti uomo\", \"Camicie uomo\", \"T-shirt uomo\", \
+         \"Maglioni e pullover uomo\", \"Completi e blazer uomo\", \"Pantaloni uomo\", \
+         \"Jeans uomo\", \"Pantaloncini uomo\", \"Costumi da bagno uomo\", \
+         \"Abbigliamento sportivo uomo\", \
+         \"Scarpe uomo\", \"Stivali uomo\", \"Sneakers uomo\", \"Scarpe formali\", \
+         \"Cinture uomo\", \"Cappelli uomo\", \"Gioielli uomo\", \"Cravatte e papillon\", \
+         \"Orologi uomo\", \"Occhiali da sole uomo\", \
+         \"Abbigliamento bambina\", \"Abbigliamento bambino\", \"Scarpe bambini\", \
+         \"Giocattoli\", \"Peluche\", \"Costruzioni\", \"Bambole\", \
+         \"Passeggini e carrozzine\", \"Seggiolini auto\", \"Arredamento bambini\", \
+         \"Arredamento\", \"Elettrodomestici cucina\", \"Pentole e padelle\", \
+         \"Utensili cucina\", \"Stoviglie\", \"Biancheria letto\", \"Tende e tapparelle\", \
+         \"Tappeti\", \"Candele e profumi casa\", \"Illuminazione\", \"Cornici\", \
+         \"Specchi\", \"Vasi\", \"Decorazioni parete\", \
+         \"Materiale ufficio\", \"Attrezzi e bricolage\", \"Giardino\", \"Animali\", \
+         \"Videogiochi e console\", \"Console\", \"Computer portatili\", \"Computer desktop\", \
+         \"Componenti PC\", \"Tastiere\", \"Mouse\", \"Monitor\", \"Stampanti\", \
+         \"Smartphone\", \"Accessori telefono\", \"Cuffie e auricolari\", \
+         \"Altoparlanti e speaker\", \"Audio e hi-fi\", \"Fotocamere\", \"Obiettivi\", \
+         \"Tablet\", \"E-reader\", \"Televisori\", \"Proiettori\", \"Smartwatch\", \
+         \"Fitness tracker\", \"Caricabatterie e power bank\", \"Cavi e adattatori\", \
+         \"Libri\", \"Narrativa\", \"Saggistica\", \"Fumetti e manga\", \"Riviste\", \
+         \"Musica\", \"Vinile\", \"CD\", \"DVD e Blu-ray\", \
+         \"Carte collezionabili\", \"Giochi da tavolo\", \"Puzzle\", \
+         \"Monete e banconote\", \"Francobolli\", \"Strumenti musicali\", \"Chitarre\", \
+         \"Arte e artigianato\", \
+         \"Ciclismo\", \"Fitness e palestra\", \"Corsa\", \"Yoga e pilates\", \
+         \"Campeggio\", \"Arrampicata\", \"Pesca\", \"Nuoto\", \"Surf e SUP\", \
+         \"Calcio\", \"Basket\", \"Pallavolo\", \"Tennis\", \"Padel\", \"Golf\", \
+         \"Equitazione\", \"Skateboard\", \"Boxe e arti marziali\", \
+         \"Sci\", \"Snowboard\", \"Pattinaggio\", \
+         \"Articoli griffati\", \"Borse griffate\", \"Scarpe griffate\", \
+         \"Auto\", \"Moto\", \"Ricambi auto\"]. \
          For \"condition\", pick EXACTLY one from: \
          [\"Nuovo\", \"Usato - Come nuovo\", \"Usato - Buono\", \"Usato - Accettabile\"]. \
+         For \"brand\", identify the brand/manufacturer from the photos if visible (e.g. Nike, Samsung, IKEA). \
+         Use null if no brand is identifiable. \
          Return ONLY a JSON object with these keys (include all even if some already exist): \
          {{\"name\": \"short product name\", \"description\": \"marketplace listing description\", \
-         \"price\": 0.00, \"category\": \"exact category from list\", \"condition\": \"exact condition from list\"}}",
+         \"price\": 0.00, \"category\": \"exact category from list\", \
+         \"condition\": \"exact condition from list\", \"brand\": \"brand name or null\"}}",
         if needs_name { "name, " } else { "" },
         if needs_desc { "description, " } else { "" },
         if needs_price { "price, " } else { "" },
         if needs_category { "category, " } else { "" },
-        if needs_condition { "condition" } else { "" },
+        if needs_condition { "condition, " } else { "" },
+        if needs_brand { "brand" } else { "" },
         language_name
     );
 
@@ -341,6 +385,14 @@ async fn process_ai_request(
                                             m.condition = Some(cond.to_string());
                                         }
                                     }
+                                    if needs_brand {
+                                        if let Some(brand) = get_string_field(
+                                            &parsed,
+                                            &["brand", "Brand", "marca", "Marca", "manufacturer"],
+                                        ) {
+                                            m.brand = Some(brand);
+                                        }
+                                    }
 
                                     if let Ok(yaml) = serde_yaml::to_string(&m) {
                                         let _ = std::fs::write(&manifest_path, yaml);
@@ -415,6 +467,49 @@ fn extract_json(text: &str) -> String {
     }
 
     trimmed.to_string()
+}
+
+fn get_value_case_insensitive<'a>(
+    parsed: &'a serde_json::Value,
+    keys: &[&str],
+) -> Option<&'a serde_json::Value> {
+    let obj = parsed.as_object()?;
+    for key in keys {
+        if let Some(value) = obj.get(*key) {
+            return Some(value);
+        }
+        if let Some((_, value)) = obj.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)) {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn normalize_optional_text(raw: &str) -> Option<String> {
+    let value = raw.trim();
+    if value.is_empty() {
+        return None;
+    }
+
+    let lowered = value.to_ascii_lowercase();
+    if matches!(
+        lowered.as_str(),
+        "null" | "none" | "n/a" | "na" | "unknown" | "sconosciuto"
+    ) {
+        return None;
+    }
+
+    Some(value.to_string())
+}
+
+fn get_string_field(parsed: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    let value = get_value_case_insensitive(parsed, keys)?;
+    match value {
+        serde_json::Value::String(text) => normalize_optional_text(text),
+        serde_json::Value::Number(number) => Some(number.to_string()),
+        serde_json::Value::Bool(flag) => Some(flag.to_string()),
+        _ => None,
+    }
 }
 
 #[tauri::command]
@@ -541,22 +636,59 @@ async fn process_regenerate(
 
     let prompt = format!(
         "You are helping list a used item for sale on an online marketplace. \
-         Look at the photos and provide: name, description, price, category, condition. \
+         Look at the photos and provide: name, description, price, category, condition, brand. \
          Respond in {}. \
          For \"category\", pick EXACTLY one from this list: \
-         [\"Attrezzi\", \"Arredamento\", \"Articoli per la casa\", \"Giardino\", \"Elettrodomestici\", \
-         \"Videogiochi\", \"Libri, film e musica\", \"Borse e valigie\", \
-         \"Abbigliamento e scarpe da donna\", \"Abbigliamento e scarpe da uomo\", \
-         \"Gioielli e accessori\", \"Salute e bellezza\", \"Articoli per animali\", \
-         \"Neonati e bambini\", \"Giocattoli e videogiochi\", \"Elettronica e computer\", \
-         \"Cellulari\", \"Biciclette\", \"Arte e artigianato\", \
-         \"Sport e attività all'aperto\", \"Ricambi auto\", \"Strumenti musicali\", \
-         \"Articoli d'antiquariato e da collezione\", \"Mercatino dell'usato\", \"Varie\", \"Veicoli\"]. \
+         [\"Vestiti donna\", \"Giacche e cappotti donna\", \"Maglioni e pullover donna\", \
+         \"Abiti donna\", \"Gonne\", \"Top e t-shirt donna\", \"Jeans donna\", \
+         \"Pantaloni donna\", \"Pantaloncini donna\", \"Costumi da bagno donna\", \
+         \"Lingerie e pigiami\", \"Abbigliamento sportivo donna\", \
+         \"Scarpe donna\", \"Stivali donna\", \"Sandali donna\", \"Tacchi\", \"Sneakers donna\", \
+         \"Borse\", \"Zaini donna\", \"Pochette\", \"Portafogli donna\", \"Cinture donna\", \
+         \"Cappelli donna\", \"Gioielli donna\", \"Sciarpe e scialli donna\", \
+         \"Occhiali da sole donna\", \"Orologi donna\", \
+         \"Make-up\", \"Profumi\", \"Cura del viso\", \"Cura del corpo\", \
+         \"Vestiti uomo\", \"Giacche e cappotti uomo\", \"Camicie uomo\", \"T-shirt uomo\", \
+         \"Maglioni e pullover uomo\", \"Completi e blazer uomo\", \"Pantaloni uomo\", \
+         \"Jeans uomo\", \"Pantaloncini uomo\", \"Costumi da bagno uomo\", \
+         \"Abbigliamento sportivo uomo\", \
+         \"Scarpe uomo\", \"Stivali uomo\", \"Sneakers uomo\", \"Scarpe formali\", \
+         \"Cinture uomo\", \"Cappelli uomo\", \"Gioielli uomo\", \"Cravatte e papillon\", \
+         \"Orologi uomo\", \"Occhiali da sole uomo\", \
+         \"Abbigliamento bambina\", \"Abbigliamento bambino\", \"Scarpe bambini\", \
+         \"Giocattoli\", \"Peluche\", \"Costruzioni\", \"Bambole\", \
+         \"Passeggini e carrozzine\", \"Seggiolini auto\", \"Arredamento bambini\", \
+         \"Arredamento\", \"Elettrodomestici cucina\", \"Pentole e padelle\", \
+         \"Utensili cucina\", \"Stoviglie\", \"Biancheria letto\", \"Tende e tapparelle\", \
+         \"Tappeti\", \"Candele e profumi casa\", \"Illuminazione\", \"Cornici\", \
+         \"Specchi\", \"Vasi\", \"Decorazioni parete\", \
+         \"Materiale ufficio\", \"Attrezzi e bricolage\", \"Giardino\", \"Animali\", \
+         \"Videogiochi e console\", \"Console\", \"Computer portatili\", \"Computer desktop\", \
+         \"Componenti PC\", \"Tastiere\", \"Mouse\", \"Monitor\", \"Stampanti\", \
+         \"Smartphone\", \"Accessori telefono\", \"Cuffie e auricolari\", \
+         \"Altoparlanti e speaker\", \"Audio e hi-fi\", \"Fotocamere\", \"Obiettivi\", \
+         \"Tablet\", \"E-reader\", \"Televisori\", \"Proiettori\", \"Smartwatch\", \
+         \"Fitness tracker\", \"Caricabatterie e power bank\", \"Cavi e adattatori\", \
+         \"Libri\", \"Narrativa\", \"Saggistica\", \"Fumetti e manga\", \"Riviste\", \
+         \"Musica\", \"Vinile\", \"CD\", \"DVD e Blu-ray\", \
+         \"Carte collezionabili\", \"Giochi da tavolo\", \"Puzzle\", \
+         \"Monete e banconote\", \"Francobolli\", \"Strumenti musicali\", \"Chitarre\", \
+         \"Arte e artigianato\", \
+         \"Ciclismo\", \"Fitness e palestra\", \"Corsa\", \"Yoga e pilates\", \
+         \"Campeggio\", \"Arrampicata\", \"Pesca\", \"Nuoto\", \"Surf e SUP\", \
+         \"Calcio\", \"Basket\", \"Pallavolo\", \"Tennis\", \"Padel\", \"Golf\", \
+         \"Equitazione\", \"Skateboard\", \"Boxe e arti marziali\", \
+         \"Sci\", \"Snowboard\", \"Pattinaggio\", \
+         \"Articoli griffati\", \"Borse griffate\", \"Scarpe griffate\", \
+         \"Auto\", \"Moto\", \"Ricambi auto\"]. \
          For \"condition\", pick EXACTLY one from: \
          [\"Nuovo\", \"Usato - Come nuovo\", \"Usato - Buono\", \"Usato - Accettabile\"]. \
+         For \"brand\", identify the brand/manufacturer from the photos if visible (e.g. Nike, Samsung, IKEA). \
+         Use null if no brand is identifiable. \
          Return ONLY a JSON object with these keys: \
          {{\"name\": \"short product name\", \"description\": \"marketplace listing description\", \
-         \"price\": 0.00, \"category\": \"exact category from list\", \"condition\": \"exact condition from list\"}}",
+         \"price\": 0.00, \"category\": \"exact category from list\", \
+         \"condition\": \"exact condition from list\", \"brand\": \"brand name or null\"}}",
         language_name
     );
 
@@ -649,6 +781,12 @@ async fn process_regenerate(
                                     }
                                     if let Some(cond) = parsed["condition"].as_str() {
                                         m.condition = Some(cond.to_string());
+                                    }
+                                    if let Some(brand) = get_string_field(
+                                        &parsed,
+                                        &["brand", "Brand", "marca", "Marca", "manufacturer"],
+                                    ) {
+                                        m.brand = Some(brand);
                                     }
 
                                     if let Ok(yaml) = serde_yaml::to_string(&m) {

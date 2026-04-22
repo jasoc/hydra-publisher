@@ -45,8 +45,12 @@
         <mat-label>Categoria</mat-label>
         <mat-select [(ngModel)]="category">
           <mat-option [value]="null">—</mat-option>
-          @for (c of categories; track c) {
-            <mat-option [value]="c">{{ c }}</mat-option>
+          @for (g of categories; track g.label) {
+            <mat-optgroup [label]="g.label">
+              @for (c of g.categories; track c) {
+                <mat-option [value]="c">{{ c }}</mat-option>
+              }
+            </mat-optgroup>
           }
         </mat-select>
       </mat-form-field>
@@ -59,6 +63,11 @@
             <mat-option [value]="c">{{ c }}</mat-option>
           }
         </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Brand</mat-label>
+        <input matInput [(ngModel)]="brand" placeholder="es. Nike, Samsung, IKEA…" />
       </mat-form-field>
     </div>
 

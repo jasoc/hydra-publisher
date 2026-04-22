@@ -8,4 +8,5 @@ export interface Article {
   folderPath: string;
   category: string | null;
   condition: string | null;
+  brand: string | null;
 }

@@ -14,6 +14,8 @@ pub struct Article {
     pub category: Option<String>,
     #[serde(default)]
     pub condition: Option<String>,
+    #[serde(default)]
+    pub brand: Option<String>,
 }
 
 /// Written to manifest.yaml inside each article folder
@@ -30,6 +32,8 @@ pub struct ArticleManifest {
     pub category: Option<String>,
     #[serde(default)]
     pub condition: Option<String>,
+    #[serde(default)]
+    pub brand: Option<String>,
 }
 
 impl ArticleManifest {
@@ -44,6 +48,7 @@ impl ArticleManifest {
             videos: Vec::new(),
             category: None,
             condition: None,
+            brand: None,
         }
     }
 
@@ -58,6 +63,7 @@ impl ArticleManifest {
             folder_path,
             category: self.category.clone(),
             condition: self.condition.clone(),
+            brand: self.brand.clone(),
         }
     }
 }
