@@ -188,6 +188,12 @@ See **`docs/selenium-selectors.md`** for the recommended approach to discovering
 - **MCP batching policy**: minimize tool calls by grouping text-field operations into one `evaluate_script`; keep separate real interactions only where required (e.g. React-Select dropdowns need real click/keyboard).
 - **Multi-article runs**: treat each article as an atomic transaction: publish → skip upsell → verify `/annunci/inserito?adId=...` → move to next article.
 
+## Execution guardrails (2026-04)
+
+- Do not run compilation/syntax/lint checks by default (`py_compile`, `cargo check`, `tsc`, etc.) unless explicitly requested by the user.
+- Do not run `cd` commands unless strictly necessary for executing a required command.
+- If the user asks for low-noise execution (no extra checks), perform only the requested edits and stop.
+
 ## Login flow update (2026-04)
 
 - Selenium providers no longer own a coded credential/TOTP login procedure in the publish flow.

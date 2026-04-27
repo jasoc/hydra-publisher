@@ -16,6 +16,7 @@ Aggiorna quello quando il sito cambia DOM — questo file non va toccato.
 """
 
 import os
+import random
 import time
 from typing import Any
 
@@ -241,6 +242,55 @@ class VintedProvider(SeleniumProvider):
     def _wait(self, driver: Any, timeout: int = 15) -> WebDriverWait:
         return WebDriverWait(driver, timeout)
 
+    def _human_pause(self, base: float = 0.8, jitter: float = 1.5) -> None:
+        """Pausa con jitter per ridurre pattern meccanici ripetibili."""
+        delay = max(0.2, base + random.uniform(0.0, jitter))
+        time.sleep(delay)
+
+    def _human_type(self, element: Any, text: str, min_delay: float = 0.04, max_delay: float = 0.14) -> None:
+        """Digita testo carattere per carattere con ritmo umano.
+
+        Ogni carattere ha un ritardo random, con pause più lunghe dopo
+        spazi e punteggiatura (come farebbe una persona vera).
+        """
+        for i, char in enumerate(text):
+            element.send_keys(char)
+            # Pausa più lunga dopo spazio/punteggiatura (come un umano)
+            if char in ' .,;:!?\n':
+                time.sleep(random.uniform(min_delay * 2, max_delay * 3))
+            else:
+                time.sleep(random.uniform(min_delay, max_delay))
+            # Micro-pausa occasionale ("pensare") ogni 15-40 caratteri
+            if i > 0 and i % random.randint(15, 40) == 0:
+                time.sleep(random.uniform(0.3, 0.8))
+
+    def _ensure_not_flagged(self, driver: Any) -> None:
+        """Interrompe il flusso se Vinted mostra il banner anti-automazione."""
+        try:
+            page = (driver.page_source or "").lower()
+        except Exception:
+            return
+
+        suspicious_markers = [
+            "we've noticed unusual activity",
+            "resembles automated or suspicious behaviour",
+            "unusual activity with your session",
+            "attivit\u00e0 insolita",
+            "attivit\u00e0 sospetta",
+            "comportamento automatizzato",
+            "verifica di sicurezza",
+            "captcha",
+            "recaptcha",
+            "hcaptcha",
+            "cf-challenge",
+            "just a moment",
+        ]
+        if any(marker in page for marker in suspicious_markers):
+            raise RuntimeError(
+                "Vinted ha segnalato attività sospetta nella sessione corrente. "
+                "Metti in pausa il batch e riprova più tardi con ritmo più lento."
+            )
+
     def _field_present(self, driver: Any, field_id: str, timeout: float = 2.5) -> bool:
         """Rileva se un campo input/select con id specifico è presente nel form."""
         end = time.time() + timeout
@@ -257,7 +307,7 @@ class VintedProvider(SeleniumProvider):
         while time.time() < end:
             if any(driver.find_elements(By.ID, field_id) for field_id in dynamic_ids):
                 # piccolo buffer per React re-render / clickability
-                time.sleep(0.6)
+                self._human_pause(0.4, 0.6)
                 return
             time.sleep(0.2)
 
@@ -274,7 +324,7 @@ class VintedProvider(SeleniumProvider):
             )
             btn.click()
             print("[Vinted] Cookie banner chiuso.")
-            time.sleep(0.5)
+            self._human_pause(0.8, 1.2)
         except Exception:
             pass  # nessun banner presente
 
@@ -314,8 +364,8 @@ class VintedProvider(SeleniumProvider):
         # send_keys accetta più file separati da \n
         file_input.send_keys("\n".join(paths))
         print(f"[Vinted] Caricate {len(paths)} foto.")
-        # Attendi che i thumbnail vengano renderizzati
-        time.sleep(2)
+        # Attendi che i thumbnail vengano renderizzati (1 foto ≈ 2-3s)
+        self._human_pause(2.0 + len(paths) * 0.8, 2.0)
 
     def _fill_title(self, article: dict, driver: Any) -> None:
         """Compila il campo titolo."""
@@ -324,9 +374,12 @@ class VintedProvider(SeleniumProvider):
             return
         wait = self._wait(driver)
         el = wait.until(EC.presence_of_element_located((By.ID, "title")))
+        el.click()
+        self._human_pause(0.3, 0.4)
         el.clear()
-        el.send_keys(title)
+        self._human_type(el, title)
         print(f"[Vinted] Titolo: {title[:40]}")
+        self._human_pause(0.5, 0.8)
 
     def _fill_description(self, article: dict, driver: Any) -> None:
         """Compila il campo descrizione."""
@@ -335,9 +388,12 @@ class VintedProvider(SeleniumProvider):
             return
         wait = self._wait(driver)
         el = wait.until(EC.presence_of_element_located((By.ID, "description")))
+        el.click()
+        self._human_pause(0.3, 0.5)
         el.clear()
-        el.send_keys(desc)
+        self._human_type(el, desc)
         print(f"[Vinted] Descrizione: {desc[:40]}")
+        self._human_pause(0.6, 1.0)
 
     def _fill_price(self, article: dict, driver: Any) -> None:
         """Compila il campo prezzo."""
@@ -346,9 +402,13 @@ class VintedProvider(SeleniumProvider):
             return
         wait = self._wait(driver)
         el = wait.until(EC.presence_of_element_located((By.ID, "price")))
+        el.click()
+        self._human_pause(0.3, 0.4)
         el.clear()
-        el.send_keys(str(int(price)) if isinstance(price, float) and price == int(price) else str(price))
+        price_str = str(int(price)) if isinstance(price, float) and price == int(price) else str(price)
+        self._human_type(el, price_str)
         print(f"[Vinted] Prezzo: {price}")
+        self._human_pause(0.5, 0.7)
 
     def _select_category(self, article: dict, driver: Any) -> None:
         """
@@ -372,15 +432,15 @@ class VintedProvider(SeleniumProvider):
         # 1. Apri il dropdown cliccando sull'input categoria
         cat_input = wait.until(EC.element_to_be_clickable((By.ID, "category")))
         cat_input.click()
-        time.sleep(0.5)
+        self._human_pause(0.8, 1.0)
 
         # 2. Digita nel campo di ricerca
         search_input = wait.until(
             EC.presence_of_element_located((By.ID, "catalog-search-input"))
         )
         search_input.clear()
-        search_input.send_keys(search_term)
-        time.sleep(1.5)  # attendi risultati filtrati
+        self._human_type(search_input, search_term)
+        self._human_pause(1.5, 1.5)  # attendi risultati filtrati
 
         # 3. Clicca il primo risultato di ricerca
         results = driver.find_elements(
@@ -391,7 +451,7 @@ class VintedProvider(SeleniumProvider):
             label = results[0].text.strip().split("\n")[0][:50]
             driver.execute_script("arguments[0].click();", results[0])
             print(f"[Vinted] Categoria: '{search_term}' → '{label}'")
-            time.sleep(0.5)
+            self._human_pause(0.8, 1.2)
         else:
             print(f"[Vinted] Nessun risultato per categoria '{search_term}'")
 
@@ -409,7 +469,7 @@ class VintedProvider(SeleniumProvider):
         # 1. Apri dialog
         cond_btn = wait.until(EC.element_to_be_clickable((By.ID, "condition")))
         cond_btn.click()
-        time.sleep(0.5)
+        self._human_pause(0.8, 1.0)
 
         # 2. Clicca l'opzione giusta
         option = wait.until(
@@ -417,7 +477,7 @@ class VintedProvider(SeleniumProvider):
         )
         option.click()
         print(f"[Vinted] Condizione: {raw or '(default)'} → {testid}")
-        time.sleep(0.5)
+        self._human_pause(0.6, 1.0)
 
     def _select_brand(self, article: dict, driver: Any) -> None:
         """Seleziona il brand tramite il dropdown con ricerca.
@@ -448,7 +508,7 @@ class VintedProvider(SeleniumProvider):
                 print("[Vinted] Brand: nessuno (empty-brand)")
             except Exception as e:
                 print(f"[Vinted] Brand: skip (nessun brand, errore: {e})")
-            time.sleep(0.5)
+            self._human_pause(0.3, 0.6)
             return
 
         # Brand valorizzato: retry fino a 3 volte
@@ -460,7 +520,7 @@ class VintedProvider(SeleniumProvider):
             except Exception as e:
                 if attempt < max_attempts:
                     print(f"[Vinted] Brand tentativo {attempt}/{max_attempts} fallito: {e}, riprovo...")
-                    time.sleep(1)  # attesa prima di retry
+                    self._human_pause(0.8, 0.8)  # attesa prima di retry
                 else:
                     print(f"[Vinted] Brand: fallito dopo {max_attempts} tentativi")
                     raise RuntimeError(f"Impossibile selezionare brand '{brand}' dopo {max_attempts} tentativi: {e}")
@@ -476,14 +536,15 @@ class VintedProvider(SeleniumProvider):
         
         # Aspetta che il dropdown si apra (ricerca diventa visibile)
         wait.until(EC.presence_of_element_located((By.ID, "brand-search-input")))
+        self._human_pause(0.5, 0.6)
 
         # 2. Riempi il campo di ricerca
         search_input = wait.until(
             EC.presence_of_element_located((By.ID, "brand-search-input"))
         )
         search_input.clear()
-        search_input.send_keys(brand)
-        time.sleep(1.5)  # attendi filtraggio DOM
+        self._human_type(search_input, brand)
+        self._human_pause(1.5, 1.5)  # attendi filtraggio DOM
 
         # 3. Aspetta che il custom brand appaia (max 3s)
         custom_appeared = False
@@ -502,7 +563,7 @@ class VintedProvider(SeleniumProvider):
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", custom_btn)
             driver.execute_script("arguments[0].click();", custom_btn)
             print(f"[Vinted] Brand: '{brand}' → custom brand '{label}' (tentativo {attempt}/{max_attempts})")
-            time.sleep(0.5)
+            self._human_pause(0.8, 1.0)
             return
 
         # 4. Se custom brand non appare, seleziona il PRIMO brand dalla lista filtrata
@@ -527,7 +588,7 @@ class VintedProvider(SeleniumProvider):
                 print(f"[Vinted] Brand: '{brand}' non trovato, fallback empty-brand (tentativo {attempt}/{max_attempts})")
             except Exception:
                 raise RuntimeError(f"Brand '{brand}': nessuna opzione disponibile e empty-brand non trovato")
-        time.sleep(0.5)
+        self._human_pause(0.8, 1.0)
 
     def _select_size_middle(self, driver: Any) -> None:
         """Seleziona la taglia scegliendo l'opzione centrale disponibile nel popup."""
@@ -536,7 +597,7 @@ class VintedProvider(SeleniumProvider):
         # 1. Apri dialog taglia
         size_btn = wait.until(EC.element_to_be_clickable((By.ID, "size")))
         size_btn.click()
-        time.sleep(0.5)
+        self._human_pause(0.8, 1.0)
 
         # 2. Raccogli opzioni disponibili e clicca quella centrale
         try:
@@ -563,7 +624,7 @@ class VintedProvider(SeleniumProvider):
         driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target)
         driver.execute_script("arguments[0].click();", target)
         print(f"[Vinted] Taglia: selezionata opzione centrale ({mid_idx + 1}/{len(options)}) '{label}'")
-        time.sleep(0.5)
+        self._human_pause(0.8, 1.0)
 
     def _select_colors(self, article: dict, driver: Any) -> None:
         """Seleziona i colori hardcoded: Grigio (color-3) + Cachi (color-16).
@@ -579,7 +640,7 @@ class VintedProvider(SeleniumProvider):
         # 1. Apri dialog colori
         color_btn = wait.until(EC.element_to_be_clickable((By.ID, "color")))
         color_btn.click()
-        time.sleep(0.5)
+        self._human_pause(0.8, 1.0)
 
         # 2. Seleziona Grigio
         try:
@@ -601,11 +662,11 @@ class VintedProvider(SeleniumProvider):
         except Exception:
             print("[Vinted] Colore Cachi non trovato")
 
-        time.sleep(0.5)
+        self._human_pause(0.6, 0.8)
         
         # 4. Chiudi il popup premendo Escape per applicare i colori
         driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
-        time.sleep(0.5)
+        self._human_pause(0.8, 1.0)
         print("[Vinted] Popup colori chiuso")
 
     def _submit(self, driver: Any) -> None:
@@ -618,11 +679,12 @@ class VintedProvider(SeleniumProvider):
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='upload-form-save-button']"))
             )
             # Ulteriore attesa per assicurare che il form sia completamente pronto
-            time.sleep(1)
+            self._human_pause(1.5, 2.0)
             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submit_btn)
+            self._human_pause(0.5, 0.8)
             driver.execute_script("arguments[0].click();", submit_btn)
             print("[Vinted] Click su bottone 'Carica'")
-            time.sleep(2)  # attendi redirect
+            self._human_pause(2.0, 2.0)  # attendi redirect
         except Exception as e:
             raise RuntimeError(f"Vinted submit fallito: {e}")
 
@@ -640,7 +702,8 @@ class VintedProvider(SeleniumProvider):
 
         # 0. Naviga alla pagina di vendita
         driver.get(SELL_URL)
-        time.sleep(2)
+        self._human_pause(2.5, 2.5)
+        self._ensure_not_flagged(driver)
 
         print("[Vinted] Navigato a pagina vendita, pronto per compilare form.")
 
@@ -658,6 +721,7 @@ class VintedProvider(SeleniumProvider):
 
         # 4. Categoria
         self._select_category(article, driver)
+        self._ensure_not_flagged(driver)
 
         # 4.1 I campi extra appaiono dinamicamente dopo la categoria.
         self._wait_optional_fields_after_category(driver)
@@ -665,26 +729,33 @@ class VintedProvider(SeleniumProvider):
         # 5. Campi dinamici: compila solo quelli presenti nel form corrente.
         if self._field_present(driver, "brand"):
             self._select_brand(article, driver)
+            self._human_pause(0.8, 1.2)
         else:
             print("[Vinted] Campo brand non presente, skip")
 
         if self._field_present(driver, "condition"):
             self._select_condition(article, driver)
+            self._human_pause(0.8, 1.2)
         else:
             print("[Vinted] Campo condition non presente, skip")
 
         if self._field_present(driver, "color"):
             self._select_colors(article, driver)
+            self._human_pause(0.8, 1.2)
         else:
             print("[Vinted] Campo color non presente, skip")
 
         if self._field_present(driver, "size"):
             self._select_size_middle(driver)
+            self._human_pause(0.8, 1.2)
         else:
             print("[Vinted] Campo size non presente, skip")
+        self._ensure_not_flagged(driver)
 
         # 6. Prezzo
         self._fill_price(article, driver)
+        self._human_pause(1.0, 1.5)
+        self._ensure_not_flagged(driver)
 
         # 7. Submit
         self._submit(driver)

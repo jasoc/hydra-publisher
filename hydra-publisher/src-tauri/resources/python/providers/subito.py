@@ -22,7 +22,8 @@ import time
 import urllib.parse
 from typing import Any
 
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, ElementNotInteractableException
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -58,89 +59,89 @@ CATEGORY_MAP: dict[str, int] = {
     # Elettronica
     "Videogiochi e console": 22,
     "Console": 22,
-    "Computer portatili": 8,
-    "Computer desktop": 8,
-    "Componenti PC": 8,
-    "Tastiere": 8,
-    "Mouse": 8,
-    "Monitor": 8,
-    "Stampanti": 8,
-    "Cuffie e auricolari": 8,
-    "Altoparlanti e speaker": 8,
-    "Audio e hi-fi": 8,
-    "Fotocamere": 8,
-    "Obiettivi": 8,
-    "Tablet": 8,
-    "E-reader": 8,
-    "Televisori": 8,
-    "Proiettori": 8,
-    "Smartwatch": 8,
-    "Fitness tracker": 8,
-    "Caricabatterie e power bank": 8,
-    "Cavi e adattatori": 8,
+    "Computer portatili": 10,
+    "Computer desktop": 10,
+    "Componenti PC": 10,
+    "Tastiere": 10,
+    "Mouse": 10,
+    "Monitor": 10,
+    "Stampanti": 10,
+    "Cuffie e auricolari": 10,
+    "Altoparlanti e speaker": 10,
+    "Audio e hi-fi": 10,
+    "Fotocamere": 10,
+    "Obiettivi": 10,
+    "Tablet": 10,
+    "E-reader": 10,
+    "Televisori": 10,
+    "Proiettori": 10,
+    "Smartwatch": 10,
+    "Fitness tracker": 10,
+    "Caricabatterie e power bank": 10,
+    "Cavi e adattatori": 10,
     # Telefonia
     "Smartphone": 12,
     "Accessori telefono": 12,
     # Abbigliamento (donna + uomo + bambini generico)
-    "Vestiti donna": 25,
-    "Giacche e cappotti donna": 25,
-    "Maglioni e pullover donna": 25,
-    "Abiti donna": 25,
-    "Gonne": 25,
-    "Top e t-shirt donna": 25,
-    "Jeans donna": 25,
-    "Pantaloni donna": 25,
-    "Pantaloncini donna": 25,
-    "Costumi da bagno donna": 25,
-    "Lingerie e pigiami": 25,
-    "Abbigliamento sportivo donna": 25,
-    "Scarpe donna": 25,
-    "Stivali donna": 25,
-    "Sandali donna": 25,
-    "Tacchi": 25,
-    "Sneakers donna": 25,
-    "Borse": 25,
-    "Zaini donna": 25,
-    "Pochette": 25,
-    "Portafogli donna": 25,
-    "Cinture donna": 25,
-    "Cappelli donna": 25,
-    "Gioielli donna": 25,
-    "Sciarpe e scialli donna": 25,
-    "Occhiali da sole donna": 25,
-    "Orologi donna": 25,
-    "Vestiti uomo": 25,
-    "Giacche e cappotti uomo": 25,
-    "Camicie uomo": 25,
-    "T-shirt uomo": 25,
-    "Maglioni e pullover uomo": 25,
-    "Completi e blazer uomo": 25,
-    "Pantaloni uomo": 25,
-    "Jeans uomo": 25,
-    "Pantaloncini uomo": 25,
-    "Costumi da bagno uomo": 25,
-    "Abbigliamento sportivo uomo": 25,
-    "Scarpe uomo": 25,
-    "Stivali uomo": 25,
-    "Sneakers uomo": 25,
-    "Scarpe formali": 25,
-    "Cinture uomo": 25,
-    "Cappelli uomo": 25,
-    "Gioielli uomo": 25,
-    "Cravatte e papillon": 25,
-    "Orologi uomo": 25,
-    "Occhiali da sole uomo": 25,
-    "Abbigliamento bambina": 25,
-    "Abbigliamento bambino": 25,
-    "Scarpe bambini": 25,
-    "Articoli griffati": 25,
-    "Borse griffate": 25,
-    "Scarpe griffate": 25,
+    "Vestiti donna": 16,
+    "Giacche e cappotti donna": 16,
+    "Maglioni e pullover donna": 16,
+    "Abiti donna": 16,
+    "Gonne": 16,
+    "Top e t-shirt donna": 16,
+    "Jeans donna": 16,
+    "Pantaloni donna": 16,
+    "Pantaloncini donna": 16,
+    "Costumi da bagno donna": 16,
+    "Lingerie e pigiami": 16,
+    "Abbigliamento sportivo donna": 16,
+    "Scarpe donna": 16,
+    "Stivali donna": 16,
+    "Sandali donna": 16,
+    "Tacchi": 16,
+    "Sneakers donna": 16,
+    "Borse": 16,
+    "Zaini donna": 16,
+    "Pochette": 16,
+    "Portafogli donna": 16,
+    "Cinture donna": 16,
+    "Cappelli donna": 16,
+    "Gioielli donna": 16,
+    "Sciarpe e scialli donna": 16,
+    "Occhiali da sole donna": 16,
+    "Orologi donna": 16,
+    "Vestiti uomo": 16,
+    "Giacche e cappotti uomo": 16,
+    "Camicie uomo": 16,
+    "T-shirt uomo": 16,
+    "Maglioni e pullover uomo": 16,
+    "Completi e blazer uomo": 16,
+    "Pantaloni uomo": 16,
+    "Jeans uomo": 16,
+    "Pantaloncini uomo": 16,
+    "Costumi da bagno uomo": 16,
+    "Abbigliamento sportivo uomo": 16,
+    "Scarpe uomo": 16,
+    "Stivali uomo": 16,
+    "Sneakers uomo": 16,
+    "Scarpe formali": 16,
+    "Cinture uomo": 16,
+    "Cappelli uomo": 16,
+    "Gioielli uomo": 16,
+    "Cravatte e papillon": 16,
+    "Orologi uomo": 16,
+    "Occhiali da sole uomo": 16,
+    "Abbigliamento bambina": 16,
+    "Abbigliamento bambino": 16,
+    "Scarpe bambini": 16,
+    "Articoli griffati": 16,
+    "Borse griffate": 16,
+    "Scarpe griffate": 16,
     # Bellezza
-    "Make-up": 25,
-    "Profumi": 25,
-    "Cura del viso": 25,
-    "Cura del corpo": 25,
+    "Make-up": 16,
+    "Profumi": 16,
+    "Cura del viso": 16,
+    "Cura del corpo": 16,
     # Bambini (non-abbigliamento)
     "Giocattoli": 14,
     "Peluche": 14,
@@ -150,34 +151,34 @@ CATEGORY_MAP: dict[str, int] = {
     "Seggiolini auto": 14,
     "Arredamento bambini": 14,
     # Sport
-    "Ciclismo": 32,
-    "Fitness e palestra": 32,
-    "Corsa": 32,
-    "Yoga e pilates": 32,
-    "Campeggio": 32,
-    "Arrampicata": 32,
-    "Pesca": 32,
-    "Nuoto": 32,
-    "Surf e SUP": 32,
-    "Calcio": 32,
-    "Basket": 32,
-    "Pallavolo": 32,
-    "Tennis": 32,
-    "Padel": 32,
-    "Golf": 32,
-    "Equitazione": 32,
-    "Skateboard": 32,
-    "Boxe e arti marziali": 32,
-    "Sci": 32,
-    "Snowboard": 32,
-    "Pattinaggio": 32,
+    "Ciclismo": 20,
+    "Fitness e palestra": 20,
+    "Corsa": 20,
+    "Yoga e pilates": 20,
+    "Campeggio": 20,
+    "Arrampicata": 20,
+    "Pesca": 20,
+    "Nuoto": 20,
+    "Surf e SUP": 20,
+    "Calcio": 20,
+    "Basket": 20,
+    "Pallavolo": 20,
+    "Tennis": 20,
+    "Padel": 20,
+    "Golf": 20,
+    "Equitazione": 20,
+    "Skateboard": 20,
+    "Boxe e arti marziali": 20,
+    "Sci": 20,
+    "Snowboard": 20,
+    "Pattinaggio": 20,
     # Hobby e collezionismo
-    "Carte collezionabili": 32,
-    "Giochi da tavolo": 32,
-    "Puzzle": 32,
-    "Monete e banconote": 32,
-    "Francobolli": 32,
-    "Arte e artigianato": 32,
+    "Carte collezionabili": 20,
+    "Giochi da tavolo": 20,
+    "Puzzle": 20,
+    "Monete e banconote": 20,
+    "Francobolli": 20,
+    "Arte e artigianato": 20,
     # Intrattenimento
     "Libri": 19,
     "Narrativa": 19,
@@ -216,6 +217,44 @@ CONDITION_MAP: dict[str, str] = {
 }
 DEFAULT_CONDITION = "Buono - usato ma ben conservato"
 
+# ── Sport type map (only relevant for Subito category 20 = Sports) ────────────
+SPORT_TYPE_MAP: dict[str, str] = {
+    "ciclismo": "Ciclismo",
+    "calcio": "Calcio",
+    "basket": "Basket",
+    "pallavolo": "Volley",
+    "nuoto": "Acquatici",
+    "surf e sup": "Acquatici",
+    "sci": "Sci e Snowboard",
+    "snowboard": "Sci e Snowboard",
+    "golf": "Golf",
+    "fitness e palestra": "Palestra",
+    "corsa": "Palestra",
+    "yoga e pilates": "Palestra",
+    "boxe e arti marziali": "Palestra",
+    "equitazione": "Outdoor",
+    "campeggio": "Outdoor",
+    "arrampicata": "Outdoor",
+    "pesca": "Outdoor",
+    "skateboard": "Outdoor",
+    "pattinaggio": "Outdoor",
+    "tennis": "Altro",
+    "padel": "Altro",
+    "carte collezionabili": "Altro",
+    "giochi da tavolo": "Altro",
+    "puzzle": "Altro",
+    "monete e banconote": "Altro",
+    "francobolli": "Altro",
+    "arte e artigianato": "Altro",
+    "musica": "Altro",
+    "vinile": "Altro",
+    "cd": "Altro",
+    "dvd e blu-ray": "Altro",
+    "strumenti musicali": "Altro",
+    "chitarre": "Altro",
+}
+DEFAULT_SPORT_TYPE = "Altro"
+
 # ── JS snippets ───────────────────────────────────────────────────────────────
 
 # Set value on a React-controlled input/textarea bypassing controlled component
@@ -229,32 +268,8 @@ _JS_REACT_SET = """
 })(arguments[0], arguments[1]);
 """
 
-# Async: set Comune input, wait for AJAX options, click best match
-_JS_SET_COMUNE = """
-return (async function(city) {
-  var el = document.getElementById('location');
-  if (!el) return 'NOT FOUND';
-  var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-  setter.call(el, city);
-  el.dispatchEvent(new Event('input',  {bubbles: true}));
-  el.dispatchEvent(new Event('change', {bubbles: true}));
-  el.focus();
-  for (var i = 0; i < 30; i++) {
-    await new Promise(r => setTimeout(r, 100));
-    var opts = document.querySelectorAll('[role="option"]');
-    if (opts.length > 0) {
-      var hit = Array.from(opts).find(
-        o => o.textContent.toLowerCase().includes(city.toLowerCase()));
-      (hit || opts[0]).click();
-      return 'clicked: ' + (hit || opts[0]).textContent.trim().substring(0, 40);
-    }
-  }
-  return 'timeout';
-})(arguments[0]);
-"""
-
-# Click Condizione option by keyword after ArrowDown opens the listbox
-_JS_CLICK_CONDITION = """
+# Click a react-select option by keyword match on textContent
+_JS_CLICK_OPTION = """
 var opts = document.querySelectorAll('[role="option"]');
 for (var i = 0; i < opts.length; i++) {
   if (opts[i].textContent.indexOf(arguments[0]) !== -1) { opts[i].click(); return true; }
@@ -271,7 +286,7 @@ class SubitoProvider(SeleniumProvider):
     Optional:  category, condition, city, phone
     """
 
-    DEFAULT_CITY  = os.environ.get("SUBITO_DEFAULT_CITY",  "Milano")
+    DEFAULT_CITY  = os.environ.get("SUBITO_DEFAULT_CITY",  "Catania")
     DEFAULT_PHONE = os.environ.get("SUBITO_DEFAULT_PHONE", "3331234567")
 
     def login(self, driver: Any) -> None:
@@ -332,18 +347,17 @@ class SubitoProvider(SeleniumProvider):
                               driver.find_element(By.ID, "price"),
                               price)
 
-        # 4. Condizione — real click required to open React-Select,
-        #    then ArrowDown, then JS poll + click
-        cond_el = driver.find_element(By.CSS_SELECTOR, '[aria-label="Condizione"]')
-        driver.execute_script(
-            "arguments[0].scrollIntoView({block:'center'});", cond_el)
-        cond_el.click()                     # real CDP click — JS .click() does NOT work
-        cond_el.send_keys(Keys.ARROW_DOWN)  # ensures dropdown opens
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, '[role="option"]')))
+        # 4. Condizione — react-select dropdown
         keyword = condition.split(" - ")[0]
-        if not driver.execute_script(_JS_CLICK_CONDITION, keyword):
-            driver.find_element(By.CSS_SELECTOR, '[role="option"]').click()
+        self._select_react_option(driver, "Condizione", keyword)
+
+        # 4b. Tipologia (sportType) — only present for some categories (e.g. Sports/20)
+        sport_type_fields = driver.find_elements(
+            By.CSS_SELECTOR, 'input[aria-label="Tipologia"]')
+        if sport_type_fields:
+            cat_str = str(article.get("category", "")).strip().lower()
+            sport_keyword = SPORT_TYPE_MAP.get(cat_str, DEFAULT_SPORT_TYPE)
+            self._select_react_option(driver, "Tipologia", sport_keyword)
 
         # 5. Photos — re-show file input after React re-render, send paths
         if photos:
@@ -362,32 +376,77 @@ class SubitoProvider(SeleniumProvider):
                 else:
                     print(f"[Subito] Photo not found, skipping: {path}")
 
-        # 6. Comune (AJAX autocomplete) + Phone — one JS call each
-        result = driver.execute_script(_JS_SET_COMUNE, city)
-        print(f"[Subito] Comune: {result}")
+        # 6. Comune (AJAX autocomplete) — real keystrokes trigger the AJAX
+        loc_input = driver.find_element(By.ID, "location")
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block:'center'});", loc_input)
+        time.sleep(0.3)
+        loc_input.click()
+        loc_input.clear()
+        loc_input.send_keys(city)
+        # Wait for the autocomplete dropdown to show an option
+        loc_option = WebDriverWait(driver, 8).until(
+            EC.presence_of_element_located((
+                By.CSS_SELECTOR,
+                '#autocomplete-location-menu li[role="option"]')))
+        time.sleep(0.3)
+        loc_text = loc_option.text.strip()[:40]
+        loc_option.click()
+        print(f"[Subito] Comune: clicked '{loc_text}'")
+
+        # 6b. Phone
         driver.execute_script(_JS_REACT_SET,
                               driver.find_element(By.ID, "phone"),
                               phone)
 
-        # 7. Click Continua → anteprima page
+        # 7. Click Continua
+        time.sleep(1)
         continua = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable(
-                (By.XPATH, "//button[normalize-space(text())='Continua']")))
+                (By.XPATH,
+                 "//button[contains(@class,'sbt-button') and "
+                 "normalize-space()='Continua']")))
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});",
+                              continua)
+        time.sleep(0.5)
         driver.execute_script("arguments[0].click();", continua)
-        WebDriverWait(driver, 15).until(EC.url_contains("/anteprima"))
+        print("[Subito] Clicked Continua — waiting for next page…")
 
-        # 8. Click Pubblica annuncio
-        pubblica = WebDriverWait(driver, 10).until(
+        # Wait for URL to change away from the insertion form
+        WebDriverWait(driver, 20).until(
+            lambda d: "/anteprima" in d.current_url
+            or "/conferma" in d.current_url
+            or "promuovi" in d.current_url)
+
+        # 8. Click Pubblica annuncio (on the anteprima/conferma page)
+        pubblica = WebDriverWait(driver, 15).until(
             EC.element_to_be_clickable(
-                (By.XPATH, "//button[normalize-space(text())='Pubblica annuncio']")))
+                (By.XPATH,
+                 "//button[contains(@class,'sbt-button') and "
+                 "normalize-space()='Pubblica annuncio']")))
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});",
+                              pubblica)
+        time.sleep(0.5)
         driver.execute_script("arguments[0].click();", pubblica)
-        WebDriverWait(driver, 15).until(EC.url_contains("promuovi-form"))
+        print("[Subito] Clicked Pubblica annuncio — waiting for confirmation…")
 
-        # Extract UUID from URL before upsell pages change it
+        # 8b. Post-publish upsell — skip promotion (two steps)
+        self._try_click(driver,
+            "//button[normalize-space()='Continua con visibilità minima']", 8)
+        self._try_click(driver,
+            "//button[contains(@class,'outline') and normalize-space()='Continua']", 8)
+
+        # Wait for post-publish confirmation (various URL patterns)
+        WebDriverWait(driver, 20).until(
+            lambda d: "promuovi" in d.current_url
+            or "/inserito" in d.current_url
+            or "adId=" in d.current_url)
+
+        # Extract listing ID from URL
         listing_id = self._extract_uuid(driver.current_url)
         print(f"[Subito] Published — UUID: {listing_id}")
 
-        # 9. Skip upsell screens
+        # 9. Skip upsell screens (if any)
         self._skip_promotions(driver)
         return listing_id
 
@@ -395,6 +454,29 @@ class SubitoProvider(SeleniumProvider):
         raise NotImplementedError("SubitoProvider.update() not yet implemented")
 
     # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _select_react_option(self, driver, aria_label, keyword):
+        """Open a react-select dropdown identified by aria-label and pick an option."""
+        combo_input = driver.find_element(
+            By.CSS_SELECTOR, f'input[aria-label="{aria_label}"]')
+        # The input itself is a zero-size dummy — click the control container instead
+        driver.execute_script("""
+            var control = arguments[0].closest('[class*="control"]');
+            if (control) control.scrollIntoView({block: 'center'});
+        """, combo_input)
+        time.sleep(0.4)
+        control = combo_input.find_element(
+            By.XPATH, './ancestor::div[contains(@class, "control")]')
+        control.click()
+        time.sleep(0.3)
+        # ArrowDown ensures the listbox opens
+        ActionChains(driver).send_keys(Keys.ARROW_DOWN).perform()
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '[role="option"]')))
+        # Click matching option by keyword, fallback to first option
+        if not driver.execute_script(_JS_CLICK_OPTION, keyword):
+            driver.find_element(By.CSS_SELECTOR, '[role="option"]').click()
+        time.sleep(0.3)
 
     @staticmethod
     def _extract_uuid(url: str) -> str:

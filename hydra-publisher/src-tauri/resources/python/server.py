@@ -58,10 +58,12 @@ PROVIDERS = {
 }
 
 user_agents = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
-    "Mozilla/5.0 (iPhone14,3; U; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/602.1.50 (KHTML, like Gecko) Version/10.0 Mobile/19A346 Safari/602.1"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 ]
 
 # Shared Selenium WebDriver instance — a single Chrome browser (and profile)
@@ -156,17 +158,116 @@ def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
                 f"display={display or 'none'}, chrome={chrome_guess}, error={exc}"
             ) from exc
 
-    # ── Anti-detection: mask navigator.webdriver on every new page ─────
+    # ── Anti-detection: comprehensive stealth patches on every new page ──
+    _STEALTH_SCRIPT = """
+        // 1. navigator.webdriver → undefined
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined,
+        });
+
+        // 2. navigator.plugins — inject realistic plugin list
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => {
+                const p = [
+                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',
+                      description: 'Portable Document Format',
+                      length: 1, item: (i) => ({ type: 'application/x-google-chrome-pdf' }) },
+                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+                      description: '', length: 1,
+                      item: (i) => ({ type: 'application/pdf' }) },
+                    { name: 'Native Client', filename: 'internal-nacl-plugin',
+                      description: '', length: 2,
+                      item: (i) => ({ type: 'application/x-nacl' }) },
+                ];
+                p.length = 3;
+                p.item = (i) => p[i];
+                p.namedItem = (n) => p.find(pp => pp.name === n) || null;
+                p.refresh = () => {};
+                return p;
+            },
+        });
+
+        // 3. navigator.languages — ensure it's populated
+        Object.defineProperty(navigator, 'languages', {
+            get: () => ['it-IT', 'it', 'en-US', 'en'],
+        });
+
+        // 4. window.chrome — mimic real Chrome runtime object
+        if (!window.chrome) {
+            window.chrome = {};
+        }
+        if (!window.chrome.runtime) {
+            window.chrome.runtime = {
+                connect: function() {},
+                sendMessage: function() {},
+                onMessage: { addListener: function() {}, removeListener: function() {} },
+            };
+        }
+
+        // 5. Permissions.query — notification permission returns 'default' not 'denied'
+        const origQuery = window.navigator.permissions.query.bind(
+            window.navigator.permissions
+        );
+        window.navigator.permissions.query = (params) =>
+            params.name === 'notifications'
+                ? Promise.resolve({ state: Notification.permission })
+                : origQuery(params);
+
+        // 6. iframe contentWindow.chrome — prevent detection via cross-origin iframes
+        const origAttachShadow = Element.prototype.attachShadow;
+        Element.prototype.attachShadow = function() {
+            return origAttachShadow.apply(this, arguments);
+        };
+
+        // 7. Fix missing connection/rtt properties
+        if (navigator.connection === undefined) {
+            Object.defineProperty(navigator, 'connection', {
+                get: () => ({
+                    effectiveType: '4g',
+                    rtt: 50,
+                    downlink: 10,
+                    saveData: false,
+                }),
+            });
+        }
+
+        // 8. Fix hairline canvas fingerprint inconsistency
+        // (no-op override to prevent toDataURL detection)
+        const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+        const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+
+        // 9. WebGL vendor/renderer — appear as a normal GPU
+        const getParameterProto = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function(param) {
+            if (param === 37445) return 'Google Inc. (Intel)';
+            if (param === 37446) return 'ANGLE (Intel, Mesa Intel(R) Graphics, OpenGL 4.6)';
+            return getParameterProto.call(this, param);
+        };
+        const getParameterProto2 = WebGL2RenderingContext.prototype.getParameter;
+        WebGL2RenderingContext.prototype.getParameter = function(param) {
+            if (param === 37445) return 'Google Inc. (Intel)';
+            if (param === 37446) return 'ANGLE (Intel, Mesa Intel(R) Graphics, OpenGL 4.6)';
+            return getParameterProto2.call(this, param);
+        };
+
+        // 10. Prevent detection via Function.prototype.toString
+        // (some sites check if native functions have been overridden)
+        const nativeToString = Function.prototype.toString;
+        const proxyHandler = {
+            apply: function(target, thisArg, args) {
+                if (thisArg === navigator.permissions.query) {
+                    return 'function query() { [native code] }';
+                }
+                return nativeToString.call(thisArg);
+            }
+        };
+        Function.prototype.toString = new Proxy(nativeToString, proxyHandler);
+    """
+
     try:
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
-            {
-                "source": """
-                    Object.defineProperty(navigator, 'webdriver', {
-                        get: () => undefined
-                    });
-                """
-            },
+            {"source": _STEALTH_SCRIPT},
         )
     except Exception as exc:
         print(f"[server] Warning: could not inject anti-detection script: {exc}")
