@@ -11,6 +11,7 @@ use crate::models::python_bridge::PythonBridge;
 ///  3. A `PythonPlatform::new(id, name, ...)` entry in `get_platforms()`
 pub struct PythonPlatform {
     platform_id: String,
+    #[allow(dead_code)]
     platform_name: String,
     bridge: Arc<Mutex<Option<PythonBridge>>>,
     python_dir: String,
@@ -47,14 +48,17 @@ impl PythonPlatform {
 
     fn call(&self, method: &str, article: &Article) -> Result<(), String> {
         self.ensure_bridge()?;
-        let guard = self
-            .bridge
-            .lock()
-            .map_err(|e| format!("Python bridge mutex poisoned: {e}"))?;
-        guard
-            .as_ref()
-            .expect("bridge was just started")
-            .call(&self.platform_id, method, article)
+        // Copy the port and drop the lock immediately so we don't hold the
+        // mutex during the (potentially minutes-long) HTTP call.  This
+        // allows concurrent publishes to different providers.
+        let port = {
+            let guard = self
+                .bridge
+                .lock()
+                .map_err(|e| format!("Python bridge mutex poisoned: {e}"))?;
+            guard.as_ref().expect("bridge was just started").port()
+        };
+        PythonBridge::call_static(port, &self.platform_id, method, article)
     }
 }
 
@@ -69,9 +73,5 @@ impl Platform for PythonPlatform {
 
     fn publish(&self, article: &Article) -> Result<(), String> {
         self.call("publish", article)
-    }
-
-    fn update(&self, article: &Article) -> Result<(), String> {
-        self.call("update", article)
     }
 }

@@ -76,6 +76,7 @@ impl PythonBridge {
     }
 
     /// Send a publish or update request to the Python server.
+    #[allow(dead_code)]
     pub fn call(
         &self,
         provider_id: &str,
@@ -92,6 +93,57 @@ impl PythonBridge {
             eprintln!("[hydra] provider call failed: {err}");
             Err(err)
         }
+    }
+
+    /// Send a publish request without holding any external lock.
+    /// Uses only the port (which is immutable after construction).
+    pub fn call_static(
+        port: u16,
+        provider_id: &str,
+        method: &str,
+        article: &Article,
+    ) -> Result<(), String> {
+        let body = serde_json::to_string(article)
+            .map_err(|e| format!("Failed to serialize article: {e}"))?;
+        let url = format!("http://127.0.0.1:{port}/{provider_id}/{method}");
+        eprintln!("[hydra] -> POST {url}");
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(PYTHON_CONNECT_TIMEOUT_SECS))
+            .timeout(std::time::Duration::from_secs(PYTHON_REQUEST_TIMEOUT_SECS))
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+        let response = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .map_err(|e| format!("Python bridge HTTP request failed for {url}: {e}"))?;
+        eprintln!("[hydra] <- POST {url} [{}]", response.status());
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let status = response.status();
+            let text = response.text().unwrap_or_default();
+            let msg = serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .map(|v| {
+                    let error = v["error"].as_str().unwrap_or("Unknown Python error");
+                    if let Some(tb) = v["traceback"].as_str() {
+                        format!("{error}\n{tb}")
+                    } else {
+                        error.to_string()
+                    }
+                })
+                .unwrap_or(text);
+            let err = format!("Python provider error (HTTP {status}): {msg}");
+            eprintln!("[hydra] provider call failed: {err}");
+            Err(err)
+        }
+    }
+
+    /// Return the port the Python server is listening on.
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     /// Send arbitrary JSON to a provider method and return the response body.
@@ -196,6 +248,7 @@ impl PythonBridge {
         format!("Python provider error (HTTP {status}): {msg}")
     }
 
+    #[allow(dead_code)]
     fn stop(&self) {
         let url = format!("http://127.0.0.1:{}/stop", self.port);
         let _ = reqwest::blocking::Client::new()

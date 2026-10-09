@@ -5,12 +5,6 @@ export interface AppSettings {
   aiModel: string;
   language: string;
   recentFolders: string[];
-  ebayToken: string;
-  ebayMarketplaceId: string;
-  ebayFulfillmentPolicyId: string;
-  ebayPaymentPolicyId: string;
-  ebayReturnPolicyId: string;
-  ebayCategoryId: string;
   fbEmail: string;
   fbPassword: string;
   enabledPlatforms: string[];

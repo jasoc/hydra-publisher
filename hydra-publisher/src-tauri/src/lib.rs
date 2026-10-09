@@ -31,8 +31,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::settings::get_settings,
             commands::settings::save_settings,
-            commands::settings::fetch_ebay_policies,
-            commands::settings::search_ebay_categories,
             commands::photos::pick_folder,
             commands::photos::pick_files,
             commands::photos::list_photos_in_folder,
@@ -49,8 +47,6 @@ pub fn run() {
             commands::publish::list_platforms,
             commands::publish::publish_articles,
             commands::publish::get_publish_records,
-            commands::publish::update_articles,
-            commands::publish::delete_ebay_offer,
             commands::publish::retry_publish,
             commands::publish::open_provider_session,
             commands::publish::force_reset_task,

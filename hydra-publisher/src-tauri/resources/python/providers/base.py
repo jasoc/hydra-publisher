@@ -157,13 +157,6 @@ class Provider(ABC):
         """
         ...
 
-    def update(self, article: dict) -> None:
-        """
-        Update an existing listing. Default raises NotImplementedError.
-        Override this if the platform supports updating listings.
-        """
-        raise NotImplementedError(f"{self.__class__.__name__} does not support update")
-
 
 class SeleniumProvider(ABC):
     """
@@ -195,12 +188,6 @@ class SeleniumProvider(ABC):
         driver is the active selenium.webdriver.Chrome instance.
         """
         ...
-
-    def update(self, article: dict, driver: Any) -> None:
-        """
-        Update an existing listing. Default raises NotImplementedError.
-        """
-        raise NotImplementedError(f"{self.__class__.__name__} does not support update")
 
     def start_login(self, body: dict, driver: Any) -> dict:
         """

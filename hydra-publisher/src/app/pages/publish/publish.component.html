@@ -52,18 +52,22 @@
                   <div class="platform-row">
                     <mat-icon [class]="statusClass(record.status)">{{ statusIcon(record.status) }}</mat-icon>
                     <span class="platform-name">{{ getPlatformName(record.platformId) }}</span>
-                    <span class="status-text" [class]="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+
+                    @if (isError(record.status)) {
+                      <span
+                        class="error-chip"
+                        (click)="showError(group.articleName + ' / ' + getPlatformName(record.platformId), record.status)"
+                        matTooltip="Click to see full error">
+                        err
+                      </span>
+                    } @else {
+                      <span class="status-text" [class]="statusClass(record.status)">{{ statusLabel(record.status) }}</span>
+                    }
+
                     <span class="spacer"></span>
                     @if (isInProgress(record.status)) {
                       <mat-progress-bar mode="indeterminate" class="row-progress"></mat-progress-bar>
                     }
-                    <button
-                      mat-icon-button
-                      (click)="syncRecord(record)"
-                      [matTooltip]="supportsUpdate(record.platformId) ? 'Sync to platform' : 'This platform does not support updates'"
-                      [disabled]="isInProgress(record.status) || !supportsUpdate(record.platformId)">
-                      <mat-icon>sync</mat-icon>
-                    </button>
                     @if (isInProgress(record.status) || isAwaitingLogin(record.status)) {
                       <button
                         mat-icon-button
@@ -187,9 +191,60 @@
 
   <!-- ── Publishing in progress ── -->
   @if (step() === 'publishing') {
-    <div class="section">
+    <div class="section flow-section">
       <h3>Publishing…</h3>
-      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+      <mat-progress-bar mode="indeterminate" style="margin-bottom: 16px"></mat-progress-bar>
+
+      <!-- Chrome pool monitor -->
+      @if (activeSlots().length > 0) {
+        <div class="pool-monitor">
+          <div class="pool-label">
+            <mat-icon>memory</mat-icon>
+            <span>Chrome Pool</span>
+          </div>
+          <div class="pool-slots">
+            @for (slot of activeSlots(); track slot) {
+              <span class="pool-slot active" [matTooltip]="slot">
+                <mat-icon>tab</mat-icon>
+              </span>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Live record updates -->
+      @if (articleGroups().length > 0) {
+        <div class="live-results">
+          @for (group of articleGroups(); track group.articleId) {
+            <div class="live-row">
+              <span class="live-name">{{ group.articleName }}</span>
+              <span class="spacer"></span>
+              @for (record of group.records; track record.platformId) {
+                <span class="live-chip" [class]="statusClass(record.status)" [matTooltip]="getPlatformName(record.platformId) + ': ' + statusLabel(record.status)">
+                  <mat-icon>{{ statusIcon(record.status) }}</mat-icon>
+                </span>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ── Error detail dialog ── -->
+  @if (errorDialogVisible()) {
+    <div class="error-overlay" (click)="closeErrorDialog()">
+      <div class="error-dialog" (click)="$event.stopPropagation()">
+        <div class="error-dialog-header">
+          <mat-icon color="warn">error</mat-icon>
+          <h3>{{ errorDialogTitle() }}</h3>
+          <span class="spacer"></span>
+          <button mat-icon-button (click)="closeErrorDialog()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+        <pre class="error-dialog-body">{{ errorDialogMessage() }}</pre>
+      </div>
     </div>
   }
 </div>

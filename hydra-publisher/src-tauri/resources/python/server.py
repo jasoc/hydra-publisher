@@ -11,10 +11,15 @@ Usage:
     Once ready the server prints "LISTENING:<port>" to stdout so the Rust
     caller can discover which port was assigned.
 
+    Set HYDRA_POOL_SIZE=N to control the number of parallel Chrome windows
+    (default: 2).
+
 Endpoints:
     POST /<provider_id>/publish   body: article JSON
-    POST /<provider_id>/update    body: article JSON
-    POST /stop                    graceful shutdown (closes browser sessions)
+    POST /<provider_id>/login     open/reuse a browser session
+    POST /stop                    graceful shutdown (closes all browser sessions)
+    GET  /sessions                list active Chrome pool slots
+    DELETE /sessions/<any>        kill all Chrome sessions
 """
 
 import argparse
@@ -28,34 +33,39 @@ import threading
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Dict
+from socketserver import ThreadingMixIn
+from typing import Any, List, Optional
 
-# Ensure the directory containing this script is on sys.path so that the
-# provider modules are importable regardless of the working directory from
-# which the process is spawned.
+# ---------------------------------------------------------------------------
+# Path setup
+# ---------------------------------------------------------------------------
+
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _script_dir)
-# In dev mode the providers live in providers/; in the bundled app everything
-# is flattened into the same directory, so this is a no-op there.
 _providers_dir = os.path.join(_script_dir, "providers")
 if os.path.isdir(_providers_dir):
     sys.path.insert(0, _providers_dir)
 
-# Import provider classes directly (the bundle flattens all files into python/)
 from base import SeleniumProvider  # noqa: E402
 from subito import SubitoProvider  # noqa: E402
-from local_test_selenium import LocalTestSeleniumProvider  # noqa: E402
 from facebook_marketplace import FacebookMarketplaceProvider  # noqa: E402
 from vinted import VintedProvider  # noqa: E402
 
-# Registry: maps platform id (used by Rust) → provider instance.
-# Add new providers here.
+# ---------------------------------------------------------------------------
+# Provider registry
+# ---------------------------------------------------------------------------
+
 PROVIDERS = {
     "subito": SubitoProvider(),
-    "local_test_selenium": LocalTestSeleniumProvider(),
     "facebook_marketplace": FacebookMarketplaceProvider(),
     "vinted": VintedProvider(),
 }
+
+POOL_SIZE = int(os.environ.get("HYDRA_POOL_SIZE", "2"))
+
+# ---------------------------------------------------------------------------
+# Anti-detection
+# ---------------------------------------------------------------------------
 
 user_agents = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
@@ -66,203 +76,112 @@ user_agents = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 ]
 
-# Shared Selenium WebDriver instance — a single Chrome browser (and profile)
-# is reused across all providers. Created on the first call to any
-# SeleniumProvider and kept alive until /stop or the user closes Chrome.
-_shared_driver: Any = None
+_STEALTH_SCRIPT = """
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+            const p = [
+                { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',
+                  description: 'Portable Document Format', length: 1,
+                  item: (i) => ({ type: 'application/x-google-chrome-pdf' }) },
+                { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+                  description: '', length: 1,
+                  item: (i) => ({ type: 'application/pdf' }) },
+                { name: 'Native Client', filename: 'internal-nacl-plugin',
+                  description: '', length: 2,
+                  item: (i) => ({ type: 'application/x-nacl' }) },
+            ];
+            p.length = 3;
+            p.item = (i) => p[i];
+            p.namedItem = (n) => p.find(pp => pp.name === n) || null;
+            p.refresh = () => {};
+            return p;
+        },
+    });
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['it-IT', 'it', 'en-US', 'en'],
+    });
+    if (!window.chrome) window.chrome = {};
+    if (!window.chrome.runtime) {
+        window.chrome.runtime = {
+            connect: function() {},
+            sendMessage: function() {},
+            onMessage: { addListener: function() {}, removeListener: function() {} },
+        };
+    }
+    const origQuery = window.navigator.permissions.query.bind(window.navigator.permissions);
+    window.navigator.permissions.query = (params) =>
+        params.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : origQuery(params);
+    if (navigator.connection === undefined) {
+        Object.defineProperty(navigator, 'connection', {
+            get: () => ({ effectiveType: '4g', rtt: 50, downlink: 10, saveData: false }),
+        });
+    }
+    const getParameterProto = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(param) {
+        if (param === 37445) return 'Google Inc. (Intel)';
+        if (param === 37446) return 'ANGLE (Intel, Mesa Intel(R) Graphics, OpenGL 4.6)';
+        return getParameterProto.call(this, param);
+    };
+    const getParameterProto2 = WebGL2RenderingContext.prototype.getParameter;
+    WebGL2RenderingContext.prototype.getParameter = function(param) {
+        if (param === 37445) return 'Google Inc. (Intel)';
+        if (param === 37446) return 'ANGLE (Intel, Mesa Intel(R) Graphics, OpenGL 4.6)';
+        return getParameterProto2.call(this, param);
+    };
+    const nativeToString = Function.prototype.toString;
+    const proxyHandler = {
+        apply: function(target, thisArg, args) {
+            if (thisArg === navigator.permissions.query)
+                return 'function query() { [native code] }';
+            return nativeToString.call(thisArg);
+        }
+    };
+    Function.prototype.toString = new Proxy(nativeToString, proxyHandler);
+"""
+
 _shutdown_event = threading.Event()
 
 
-def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
-    """
-    Return the shared WebDriver, or start a new browser session if none
-    exists or the previous one died (user closed Chrome).
-    A single Chrome instance with one profile is shared across all providers.
-    """
-    global _shared_driver
+# ---------------------------------------------------------------------------
+# Chrome factory
+# ---------------------------------------------------------------------------
 
-    if _shared_driver is not None:
-        try:
-            _ = _shared_driver.title  # will throw if the session is dead
-            return _shared_driver
-        except Exception:
-            print("[server] Shared Chrome session is dead, recreating...")
-            _shared_driver = None
-
+def _create_chrome(profile_dir: str) -> Any:
+    """Create a fresh Chrome WebDriver with anti-detection patches."""
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
 
-    # Single persistent Chrome profile shared by all providers
-    profile_dir = os.path.expanduser("~/.hydra-publisher/chrome-profile")
-    os.makedirs(profile_dir, exist_ok=True)
+    opts = Options()
+    opts.add_argument(f"--user-data-dir={profile_dir}")
 
-    def _build_options(user_data_dir: str | None) -> Options:
-        opts = Options()
-        if user_data_dir:
-            opts.add_argument(f"--user-data-dir={user_data_dir}")
-        # UI providers expect an interactive browser for manual login.
-        # Enable headless only when explicitly requested.
-        if os.environ.get("HYDRA_SELENIUM_HEADLESS", "").strip().lower() in {
-            "1", "true", "yes", "on"
-        }:
-            opts.add_argument("--headless=new")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--disable-gpu")
-        random_user_agent = random.choice(user_agents)
-        opts.add_argument(f"--user-agent={random_user_agent}")
+    if os.environ.get("HYDRA_SELENIUM_HEADLESS", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }:
+        opts.add_argument("--headless=new")
 
-        # ── Anti-detection flags ──────────────────────────────────────────
-        # Hide navigator.webdriver, suppress the "Chrome is being controlled
-        # by automated test software" infobar, and disable the Blink
-        # AutomationControlled feature flag.
-        opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-        opts.add_experimental_option("useAutomationExtension", False)
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument(f"--user-agent={random.choice(user_agents)}")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    opts.add_experimental_option("useAutomationExtension", False)
 
-        chrome_binary = os.environ.get("HYDRA_CHROME_BINARY", "").strip()
-        if not chrome_binary:
-            chrome_binary = (
-                shutil.which("google-chrome")
-                or shutil.which("chromium")
-                or shutil.which("chromium-browser")
-                or ""
-            )
-        if chrome_binary:
-            opts.binary_location = chrome_binary
-        return opts
+    chrome_binary = os.environ.get("HYDRA_CHROME_BINARY", "").strip()
+    if not chrome_binary:
+        chrome_binary = (
+            shutil.which("google-chrome")
+            or shutil.which("chromium")
+            or shutil.which("chromium-browser")
+            or ""
+        )
+    if chrome_binary:
+        opts.binary_location = chrome_binary
 
-    print(f"[server] Starting Chrome for provider={provider_id!r}, profile={profile_dir}")
-    try:
-        driver = webdriver.Chrome(options=_build_options(profile_dir))
-    except Exception as exc:
-        message = str(exc).lower()
-        if "user data directory is already in use" in message:
-            fallback_profile = tempfile.mkdtemp(prefix=f"hydra-{provider_id}-")
-            print(
-                "[server] Chrome profile locked, retrying with temporary profile "
-                f"{fallback_profile}"
-            )
-            driver = webdriver.Chrome(options=_build_options(fallback_profile))
-        else:
-            display = os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY") or ""
-            chrome_guess = (
-                os.environ.get("HYDRA_CHROME_BINARY", "").strip()
-                or shutil.which("google-chrome")
-                or shutil.which("chromium")
-                or shutil.which("chromium-browser")
-                or "not-found"
-            )
-            raise RuntimeError(
-                "Failed to start Chrome WebDriver. "
-                f"display={display or 'none'}, chrome={chrome_guess}, error={exc}"
-            ) from exc
-
-    # ── Anti-detection: comprehensive stealth patches on every new page ──
-    _STEALTH_SCRIPT = """
-        // 1. navigator.webdriver → undefined
-        Object.defineProperty(navigator, 'webdriver', {
-            get: () => undefined,
-        });
-
-        // 2. navigator.plugins — inject realistic plugin list
-        Object.defineProperty(navigator, 'plugins', {
-            get: () => {
-                const p = [
-                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',
-                      description: 'Portable Document Format',
-                      length: 1, item: (i) => ({ type: 'application/x-google-chrome-pdf' }) },
-                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
-                      description: '', length: 1,
-                      item: (i) => ({ type: 'application/pdf' }) },
-                    { name: 'Native Client', filename: 'internal-nacl-plugin',
-                      description: '', length: 2,
-                      item: (i) => ({ type: 'application/x-nacl' }) },
-                ];
-                p.length = 3;
-                p.item = (i) => p[i];
-                p.namedItem = (n) => p.find(pp => pp.name === n) || null;
-                p.refresh = () => {};
-                return p;
-            },
-        });
-
-        // 3. navigator.languages — ensure it's populated
-        Object.defineProperty(navigator, 'languages', {
-            get: () => ['it-IT', 'it', 'en-US', 'en'],
-        });
-
-        // 4. window.chrome — mimic real Chrome runtime object
-        if (!window.chrome) {
-            window.chrome = {};
-        }
-        if (!window.chrome.runtime) {
-            window.chrome.runtime = {
-                connect: function() {},
-                sendMessage: function() {},
-                onMessage: { addListener: function() {}, removeListener: function() {} },
-            };
-        }
-
-        // 5. Permissions.query — notification permission returns 'default' not 'denied'
-        const origQuery = window.navigator.permissions.query.bind(
-            window.navigator.permissions
-        );
-        window.navigator.permissions.query = (params) =>
-            params.name === 'notifications'
-                ? Promise.resolve({ state: Notification.permission })
-                : origQuery(params);
-
-        // 6. iframe contentWindow.chrome — prevent detection via cross-origin iframes
-        const origAttachShadow = Element.prototype.attachShadow;
-        Element.prototype.attachShadow = function() {
-            return origAttachShadow.apply(this, arguments);
-        };
-
-        // 7. Fix missing connection/rtt properties
-        if (navigator.connection === undefined) {
-            Object.defineProperty(navigator, 'connection', {
-                get: () => ({
-                    effectiveType: '4g',
-                    rtt: 50,
-                    downlink: 10,
-                    saveData: false,
-                }),
-            });
-        }
-
-        // 8. Fix hairline canvas fingerprint inconsistency
-        // (no-op override to prevent toDataURL detection)
-        const originalToBlob = HTMLCanvasElement.prototype.toBlob;
-        const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-
-        // 9. WebGL vendor/renderer — appear as a normal GPU
-        const getParameterProto = WebGLRenderingContext.prototype.getParameter;
-        WebGLRenderingContext.prototype.getParameter = function(param) {
-            if (param === 37445) return 'Google Inc. (Intel)';
-            if (param === 37446) return 'ANGLE (Intel, Mesa Intel(R) Graphics, OpenGL 4.6)';
-            return getParameterProto.call(this, param);
-        };
-        const getParameterProto2 = WebGL2RenderingContext.prototype.getParameter;
-        WebGL2RenderingContext.prototype.getParameter = function(param) {
-            if (param === 37445) return 'Google Inc. (Intel)';
-            if (param === 37446) return 'ANGLE (Intel, Mesa Intel(R) Graphics, OpenGL 4.6)';
-            return getParameterProto2.call(this, param);
-        };
-
-        // 10. Prevent detection via Function.prototype.toString
-        // (some sites check if native functions have been overridden)
-        const nativeToString = Function.prototype.toString;
-        const proxyHandler = {
-            apply: function(target, thisArg, args) {
-                if (thisArg === navigator.permissions.query) {
-                    return 'function query() { [native code] }';
-                }
-                return nativeToString.call(thisArg);
-            }
-        };
-        Function.prototype.toString = new Proxy(nativeToString, proxyHandler);
-    """
+    driver = webdriver.Chrome(options=opts)
 
     try:
         driver.execute_cdp_cmd(
@@ -270,38 +189,182 @@ def _get_or_create_driver(provider_id: str, provider: SeleniumProvider) -> Any:
             {"source": _STEALTH_SCRIPT},
         )
     except Exception as exc:
-        print(f"[server] Warning: could not inject anti-detection script: {exc}")
+        print(f"[server] Warning: could not inject stealth script: {exc}")
 
     try:
         driver.set_page_load_timeout(60)
     except Exception:
         pass
-    _shared_driver = driver
 
-    # Give the provider a chance to navigate to the login page and wait for
-    # the user to authenticate before processing any article.
-    # (Two-step login providers override login() as a no-op and use
-    # start_login/confirm_login instead.)
-    provider.login(driver)
     return driver
 
 
-def _close_all_sessions() -> None:
-    """Quit the shared browser session so Chrome releases the profile lock."""
-    global _shared_driver
-    if _shared_driver is not None:
-        try:
-            _shared_driver.quit()
-        except Exception:
-            pass
-        _shared_driver = None
+# ---------------------------------------------------------------------------
+# Driver Pool
+# ---------------------------------------------------------------------------
 
+class DriverPool:
+    """
+    Pool of N Chrome WebDriver instances for parallel publishing.
+
+    Slot 0 uses the master profile (~/.hydra-publisher/chrome-profile).
+    Slots 1..N-1 copy the master profile on first use so they inherit saved
+    sessions/cookies.  Each slot has its own lock — only one HTTP request at
+    a time can drive a given Chrome window.
+    """
+
+    def __init__(self, pool_size: int = 2) -> None:
+        self._pool_size = pool_size
+        self._drivers: List[Optional[Any]] = [None] * pool_size
+        self._slot_locks = [threading.Lock() for _ in range(pool_size)]
+        self._master_profile = os.path.expanduser("~/.hydra-publisher/chrome-profile")
+        os.makedirs(self._master_profile, exist_ok=True)
+        self._acquire_cv = threading.Condition()
+
+    # ── public API ────────────────────────────────────────────────────────
+
+    def acquire(self, provider_id: str, provider: SeleniumProvider):
+        """
+        Acquire a free Chrome slot.  Blocks until one is available.
+        Returns ``(slot_id, driver)``.
+        """
+        while True:
+            for i in range(self._pool_size):
+                if self._slot_locks[i].acquire(blocking=False):
+                    try:
+                        driver = self._ensure_driver(i, provider_id, provider)
+                        return (i, driver)
+                    except Exception:
+                        self._slot_locks[i].release()
+                        raise
+
+            # All slots busy — wait briefly and retry
+            with self._acquire_cv:
+                self._acquire_cv.wait(timeout=1.0)
+
+    def release(self, slot_id: int) -> None:
+        """Release a slot back to the pool."""
+        self._slot_locks[slot_id].release()
+        with self._acquire_cv:
+            self._acquire_cv.notify_all()
+
+    def get_active_slots(self) -> List[str]:
+        """Return list of slot names with live drivers."""
+        alive = []
+        for i in range(self._pool_size):
+            d = self._drivers[i]
+            if d is not None:
+                try:
+                    _ = d.title
+                    alive.append(f"chrome-{i}")
+                except Exception:
+                    pass
+        return alive
+
+    def close_all(self) -> None:
+        """Gracefully quit every Chrome in the pool (used at shutdown)."""
+        for i in range(self._pool_size):
+            self._slot_locks[i].acquire(blocking=True)
+            try:
+                self._quit_slot(i)
+            finally:
+                self._slot_locks[i].release()
+
+    def kill_all(self) -> List[str]:
+        """Best-effort kill of all sessions.  Returns names of killed slots."""
+        killed: List[str] = []
+        for i in range(self._pool_size):
+            if self._slot_locks[i].acquire(blocking=False):
+                try:
+                    if self._drivers[i] is not None:
+                        self._quit_slot(i)
+                        killed.append(f"chrome-{i}")
+                finally:
+                    self._slot_locks[i].release()
+        return killed
+
+    @property
+    def pool_size(self) -> int:
+        return self._pool_size
+
+    # ── internals ─────────────────────────────────────────────────────────
+
+    def _profile_dir(self, slot: int) -> str:
+        if slot == 0:
+            return self._master_profile
+        return f"{self._master_profile}-{slot}"
+
+    def _ensure_driver(self, slot: int, provider_id: str, provider: SeleniumProvider) -> Any:
+        """Return a live driver for *slot*, creating one if needed."""
+        driver = self._drivers[slot]
+        if driver is not None:
+            try:
+                _ = driver.title
+                return driver
+            except Exception:
+                print(f"[pool] Slot {slot} driver died, recreating...")
+                self._drivers[slot] = None
+
+        profile = self._profile_dir(slot)
+
+        # For non-master slots, seed from master to inherit cookies/sessions
+        if slot > 0 and not os.path.exists(profile):
+            if os.path.exists(self._master_profile):
+                print(f"[pool] Seeding slot {slot} from master profile")
+                shutil.copytree(
+                    self._master_profile,
+                    profile,
+                    ignore=shutil.ignore_patterns(
+                        "SingletonLock", "SingletonCookie", "SingletonSocket",
+                    ),
+                )
+
+        os.makedirs(profile, exist_ok=True)
+        print(f"[pool] Starting Chrome slot {slot} for {provider_id!r}, profile={profile}")
+
+        try:
+            driver = _create_chrome(profile)
+        except Exception as exc:
+            message = str(exc).lower()
+            if "user data directory is already in use" in message:
+                fallback = tempfile.mkdtemp(prefix=f"hydra-slot{slot}-")
+                print(f"[pool] Profile locked, using temp dir: {fallback}")
+                driver = _create_chrome(fallback)
+            else:
+                raise
+
+        self._drivers[slot] = driver
+        provider.login(driver)
+        return driver
+
+    def _quit_slot(self, slot: int) -> None:
+        d = self._drivers[slot]
+        if d is not None:
+            try:
+                d.quit()
+            except Exception:
+                pass
+            self._drivers[slot] = None
+
+
+_pool: Optional[DriverPool] = None
+
+
+def _get_pool() -> DriverPool:
+    global _pool
+    if _pool is None:
+        _pool = DriverPool(pool_size=POOL_SIZE)
+    return _pool
+
+
+# ---------------------------------------------------------------------------
+# Request dispatch
+# ---------------------------------------------------------------------------
 
 def _dispatch(provider_id: str, method: str, body: dict):
     """
     Route a call to the correct provider.
-    Returns None for publish/update, or a dict for login.
-    Raises ValueError / NotImplementedError on failure.
+    Returns None for publish, or a dict for login.
     """
     provider = PROVIDERS.get(provider_id)
     if provider is None:
@@ -311,14 +374,17 @@ def _dispatch(provider_id: str, method: str, body: dict):
     print(f"[server] -> {provider_id}/{method}")
 
     if isinstance(provider, SeleniumProvider):
-        driver = _get_or_create_driver(provider_id, provider)
+        pool = _get_pool()
         if method == "publish":
-            provider.publish(body, driver)
-        elif method == "update":
-            provider.update(body, driver)
+            slot_id, driver = pool.acquire(provider_id, provider)
+            try:
+                provider.publish(body, driver)
+            finally:
+                pool.release(slot_id)
         elif method == "login":
-            # Session is now created/reused by _get_or_create_driver and provider.login(driver)
-            # is called there. This endpoint intentionally does not automate credentials.
+            # Ensure a session exists (uses first available slot)
+            slot_id, driver = pool.acquire(provider_id, provider)
+            pool.release(slot_id)
             result = {"status": "ready"}
             elapsed = time.time() - started
             print(f"[server] <- {provider_id}/{method} ok ({elapsed:.1f}s)")
@@ -328,8 +394,6 @@ def _dispatch(provider_id: str, method: str, body: dict):
     else:
         if method == "publish":
             provider.publish(body)
-        elif method == "update":
-            provider.update(body)
         else:
             raise ValueError(f"Unknown method: {method!r}")
 
@@ -337,9 +401,17 @@ def _dispatch(provider_id: str, method: str, body: dict):
     print(f"[server] <- {provider_id}/{method} ok ({elapsed:.1f}s)")
 
 
+# ---------------------------------------------------------------------------
+# Threaded HTTP server
+# ---------------------------------------------------------------------------
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """HTTPServer that handles each request in a new thread."""
+    daemon_threads = True
+
+
 class _Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # noqa: A002
-        # Suppress default access log to keep stdout clean for Rust caller
         pass
 
     def _send_json(self, code: int, body: dict) -> None:
@@ -354,16 +426,13 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.strip("/")
         parts = path.split("/")
 
-        # GET /sessions — check if the shared Selenium session is alive
         if parts == ["sessions"]:
-            alive = []
-            if _shared_driver is not None:
-                try:
-                    _ = _shared_driver.title
-                    alive.append("shared")
-                except Exception:
-                    pass
-            self._send_json(200, {"sessions": alive})
+            pool = _get_pool()
+            alive = pool.get_active_slots()
+            self._send_json(200, {
+                "sessions": alive,
+                "poolSize": pool.pool_size,
+            })
             return
 
         self._send_json(404, {"error": f"Unknown path: {self.path!r}"})
@@ -372,18 +441,13 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.strip("/")
         parts = path.split("/")
 
-        # DELETE /sessions/<any> — kill the shared Selenium session
         if len(parts) == 2 and parts[0] == "sessions":
-            global _shared_driver
-            if _shared_driver is not None:
-                try:
-                    _shared_driver.quit()
-                except Exception:
-                    pass
-                _shared_driver = None
-                self._send_json(200, {"ok": True, "killed": "shared"})
+            pool = _get_pool()
+            killed = pool.kill_all()
+            if killed:
+                self._send_json(200, {"ok": True, "killed": killed})
             else:
-                self._send_json(404, {"error": "No active session"})
+                self._send_json(404, {"error": "No active sessions"})
             return
 
         self._send_json(404, {"error": f"Unknown path: {self.path!r}"})
@@ -392,17 +456,16 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.strip("/")
         parts = path.split("/")
 
-        # POST /stop — graceful shutdown
         if parts == ["stop"]:
-            _close_all_sessions()
+            pool = _get_pool()
+            pool.close_all()
             self._send_json(200, {"ok": True})
             _shutdown_event.set()
             return
 
-        # POST /<provider_id>/<method>
         if len(parts) == 2:
             provider_id, method = parts
-            if method not in ("publish", "update", "login"):
+            if method not in ("publish", "login"):
                 self._send_json(400, {"error": f"Unknown method: {method!r}"})
                 return
 
@@ -429,19 +492,22 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": f"Unknown path: {self.path!r}"})
 
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="hydra-publisher Python provider server")
     parser.add_argument("--port", type=int, default=0,
                         help="TCP port to listen on (0 = OS-assigned, default)")
     args = parser.parse_args()
 
-    server = HTTPServer(("127.0.0.1", args.port), _Handler)
+    server = ThreadedHTTPServer(("127.0.0.1", args.port), _Handler)
     actual_port = server.server_address[1]
 
-    # Signal to the Rust caller that we are ready
     print(f"LISTENING:{actual_port}", flush=True)
+    print(f"[server] Chrome pool size: {POOL_SIZE}", file=sys.stderr)
 
-    # Serve requests until /stop is received
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 

@@ -6,7 +6,6 @@ use crate::models::article::Article;
 pub struct PlatformInfo {
     pub id: String,
     pub name: String,
-    pub supports_update: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,47 +23,11 @@ pub enum PublishStatus {
     Publishing,
     Published,
     Failed(String),
-    Updating,
-    Updated,
-    UpdateFailed(String),
 }
 
 pub trait Platform: Send + Sync {
     fn id(&self) -> &str;
+    #[allow(dead_code)]
     fn name(&self) -> &str;
     fn publish(&self, article: &Article) -> Result<(), String>;
-    fn update(&self, _article: &Article) -> Result<(), String> {
-        Err(format!("Update not supported by platform '{}'", self.id()))
-    }
-}
-
-pub struct TestPlatform;
-
-impl Platform for TestPlatform {
-    fn id(&self) -> &str {
-        "test"
-    }
-
-    fn name(&self) -> &str {
-        "Test Platform"
-    }
-
-    fn publish(&self, article: &Article) -> Result<(), String> {
-        println!(
-            "[TestPlatform] Publishing article: {} (id: {}), {} photos",
-            article.name,
-            article.id,
-            article.photos.len()
-        );
-        Ok(())
-    }
-
-    fn update(&self, article: &Article) -> Result<(), String> {
-        println!(
-            "[TestPlatform] Updating article: {} (id: {})",
-            article.name,
-            article.id,
-        );
-        Ok(())
-    }
 }

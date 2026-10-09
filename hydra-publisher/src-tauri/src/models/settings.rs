@@ -10,18 +10,6 @@ pub struct AppSettings {
     pub language: String,
     pub recent_folders: Vec<String>,
     #[serde(default)]
-    pub ebay_token: String,
-    #[serde(default)]
-    pub ebay_marketplace_id: String,
-    #[serde(default)]
-    pub ebay_fulfillment_policy_id: String,
-    #[serde(default)]
-    pub ebay_payment_policy_id: String,
-    #[serde(default)]
-    pub ebay_return_policy_id: String,
-    #[serde(default)]
-    pub ebay_category_id: String,
-    #[serde(default)]
     pub fb_email: String,
     #[serde(default)]
     pub fb_password: String,
@@ -30,7 +18,7 @@ pub struct AppSettings {
 }
 
 fn default_enabled_platforms() -> Vec<String> {
-    vec!["test".to_string(), "facebook_marketplace".to_string()]
+    vec!["subito".to_string(), "facebook_marketplace".to_string(), "vinted".to_string()]
 }
 
 impl Default for AppSettings {
@@ -52,12 +40,6 @@ impl Default for AppSettings {
             ai_model: "gpt-4o".to_string(),
             language: "en".to_string(),
             recent_folders: Vec::new(),
-            ebay_token: String::new(),
-            ebay_marketplace_id: "EBAY_IT".to_string(),
-            ebay_fulfillment_policy_id: String::new(),
-            ebay_payment_policy_id: String::new(),
-            ebay_return_policy_id: String::new(),
-            ebay_category_id: String::new(),
             fb_email: String::new(),
             fb_password: String::new(),
             enabled_platforms: default_enabled_platforms(),

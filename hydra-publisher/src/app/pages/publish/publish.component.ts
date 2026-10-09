@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -6,6 +6,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatBadgeModule } from '@angular/material/badge';
 import { CatalogService } from '../../services/catalog.service';
 import { PublishService } from '../../services/publish.service';
 import { SettingsService } from '../../services/settings.service';
@@ -30,11 +31,12 @@ interface ArticleGroup {
     MatProgressBarModule,
     MatSnackBarModule,
     MatTooltipModule,
+    MatBadgeModule,
   ],
   templateUrl: './publish.component.html',
   styleUrl: './publish.component.scss',
 })
-export class PublishComponent implements OnInit {
+export class PublishComponent implements OnInit, OnDestroy {
   articles = signal<Article[]>([]);
   platforms = signal<PlatformInfo[]>([]);
   records = signal<PublishRecord[]>([]);
@@ -44,6 +46,16 @@ export class PublishComponent implements OnInit {
   step = signal<'idle' | 'select-articles' | 'select-matrix' | 'publishing'>('idle');
   selectedArticleIds = signal<Set<string>>(new Set());
   matrixSelections = signal<Map<string, Set<string>>>(new Map());
+
+  // Chrome pool monitor
+  poolSize = signal(0);
+  activeSlots = signal<string[]>([]);
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Error detail dialog
+  errorDialogVisible = signal(false);
+  errorDialogTitle = signal('');
+  errorDialogMessage = signal('');
 
   /** Records grouped by article, sorted by name. */
   articleGroups = computed<ArticleGroup[]>(() => {
@@ -88,6 +100,69 @@ export class PublishComponent implements OnInit {
     }
   }
 
+  ngOnDestroy(): void {
+    this.stopPolling();
+  }
+
+  // ---- Chrome pool monitor -------------------------------------------------
+
+  private startPolling(): void {
+    if (this.pollTimer) return;
+    this.pollSessions();
+    this.pollTimer = setInterval(() => {
+      this.pollSessions();
+      this.pollRecords();
+    }, 3000);
+  }
+
+  private stopPolling(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  private async pollSessions(): Promise<void> {
+    try {
+      const sessions = await invoke<{ sessions: string[]; poolSize: number }>('get_active_sessions');
+      // get_active_sessions returns Vec<String>, but the server now returns
+      // { sessions, poolSize } — the Rust bridge only passes Vec<String> though.
+      // We'll just use the length here.
+      if (Array.isArray(sessions)) {
+        this.activeSlots.set(sessions);
+      }
+    } catch { /* ignore */ }
+  }
+
+  private async pollRecords(): Promise<void> {
+    try {
+      await this.publishService.refreshRecords();
+      this.records.set(this.publishService.records());
+    } catch { /* ignore */ }
+  }
+
+  async killAllSessions(): Promise<void> {
+    try {
+      await invoke('kill_session', { providerId: 'shared' });
+      this.activeSlots.set([]);
+      this.snackBar.open('Chrome sessions killed', 'OK', { duration: 2000 });
+    } catch (err) {
+      this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
+    }
+  }
+
+  // ---- Error dialog --------------------------------------------------------
+
+  showError(articleName: string, status: any): void {
+    this.errorDialogTitle.set(`Error — ${articleName}`);
+    this.errorDialogMessage.set(this.getErrorMessage(status));
+    this.errorDialogVisible.set(true);
+  }
+
+  closeErrorDialog(): void {
+    this.errorDialogVisible.set(false);
+  }
+
   // ---- Expand / collapse ---------------------------------------------------
 
   toggleExpand(articleId: string): void {
@@ -103,7 +178,7 @@ export class PublishComponent implements OnInit {
   // ---- Status helpers ------------------------------------------------------
 
   isInProgress(status: any): boolean {
-    return status === 'Publishing' || status === 'Updating';
+    return status === 'Publishing';
   }
 
   isAwaitingLogin(status: any): boolean {
@@ -111,15 +186,15 @@ export class PublishComponent implements OnInit {
   }
 
   isSuccess(status: any): boolean {
-    return status === 'Published' || status === 'Updated';
+    return status === 'Published';
   }
 
   isError(status: any): boolean {
-    return typeof status === 'object' && ('Failed' in status || 'UpdateFailed' in status);
+    return typeof status === 'object' && 'Failed' in status;
   }
 
   getErrorMessage(status: any): string {
-    if (typeof status === 'object') return status['Failed'] ?? status['UpdateFailed'] ?? '';
+    if (typeof status === 'object') return status['Failed'] ?? '';
     return '';
   }
 
@@ -141,14 +216,10 @@ export class PublishComponent implements OnInit {
 
   statusLabel(status: any): string {
     if (status === 'Published')  return 'Published';
-    if (status === 'Updated')    return 'Updated';
     if (status === 'Publishing') return 'Publishing…';
-    if (status === 'Updating')   return 'Updating…';
     if (status === 'AwaitingLogin') return 'Awaiting login';
     if (typeof status === 'object' && 'Failed' in status)
       return `Failed: ${status['Failed']}`;
-    if (typeof status === 'object' && 'UpdateFailed' in status)
-      return `Failed: ${status['UpdateFailed']}`;
     return String(status);
   }
 
@@ -192,7 +263,7 @@ export class PublishComponent implements OnInit {
           r =>
             r.articleId === articleId
             && r.platformId === p.id
-            && (r.status === 'Published' || r.status === 'Updated')
+            && r.status === 'Published'
         );
         if (!published) ps.add(p.id);
       }
@@ -212,7 +283,7 @@ export class PublishComponent implements OnInit {
       r =>
         r.articleId === articleId
         && r.platformId === platformId
-        && (r.status === 'Published' || r.status === 'Updated')
+        && r.status === 'Published'
     );
   }
 
@@ -222,10 +293,6 @@ export class PublishComponent implements OnInit {
     if (ps.has(platformId)) ps.delete(platformId); else ps.add(platformId);
     matrix.set(articleId, ps);
     this.matrixSelections.set(matrix);
-  }
-
-  supportsUpdate(platformId: string): boolean {
-    return this.platforms().find(p => p.id === platformId)?.supportsUpdate ?? true;
   }
 
   matrixSelectAll(): void {
@@ -270,6 +337,7 @@ export class PublishComponent implements OnInit {
     }
 
     this.step.set('publishing');
+    this.startPolling();
     try {
       await this.publishService.publish(targets);
       this.records.set(this.publishService.records());
@@ -277,17 +345,8 @@ export class PublishComponent implements OnInit {
     } catch (err) {
       this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
     } finally {
+      this.stopPolling();
       this.step.set('idle');
-    }
-  }
-
-  async syncRecord(record: PublishRecord): Promise<void> {
-    try {
-      await this.publishService.update([record.articleId], [record.platformId]);
-      this.records.set(this.publishService.records());
-      this.snackBar.open('Sync complete!', 'OK', { duration: 2000 });
-    } catch (err) {
-      this.snackBar.open(`Error: ${err}`, 'OK', { duration: 5000 });
     }
   }
 
@@ -306,45 +365,16 @@ export class PublishComponent implements OnInit {
   }
 
   async retryRecord(record: PublishRecord): Promise<void> {
-    if (record.platformId === 'ebay') {
-      // eBay needs to delete the broken offer first
-      const confirmed = window.confirm(
-        `Delete the eBay offer for "${this.getArticleName(record.articleId)}" and retry?\n\n` +
-        `This will remove the broken offer from eBay and reset the record so you can republish.`
-      );
-      if (!confirmed) return;
-
-      try {
-        const msg = await invoke<string>('delete_ebay_offer', { articleId: record.articleId });
-        this.snackBar.open(msg, 'OK', { duration: 4000 });
-        await this.publishService.refreshRecords();
-        this.records.set(this.publishService.records());
-      } catch (err) {
-        this.snackBar.open(`Delete failed: ${err}`, 'OK', { duration: 6000 });
-        return;
-      }
-
-      // Automatically retry publish
-      try {
-        await this.publishService.publish([{ articleId: record.articleId, platformId: record.platformId }]);
-        this.records.set(this.publishService.records());
-        this.snackBar.open('Republished successfully!', 'OK', { duration: 3000 });
-      } catch (err) {
-        this.snackBar.open(`Retry failed: ${err}`, 'OK', { duration: 5000 });
-      }
-    } else {
-      // Non-eBay platforms: reset and republish via backend
-      try {
-        await invoke('retry_publish', {
-          articleId: record.articleId,
-          platformId: record.platformId,
-        });
-        await this.publishService.refreshRecords();
-        this.records.set(this.publishService.records());
-        this.snackBar.open('Republished successfully!', 'OK', { duration: 3000 });
-      } catch (err) {
-        this.snackBar.open(`Retry failed: ${err}`, 'OK', { duration: 5000 });
-      }
+    try {
+      await invoke('retry_publish', {
+        articleId: record.articleId,
+        platformId: record.platformId,
+      });
+      await this.publishService.refreshRecords();
+      this.records.set(this.publishService.records());
+      this.snackBar.open('Republished successfully!', 'OK', { duration: 3000 });
+    } catch (err) {
+      this.snackBar.open(`Retry failed: ${err}`, 'OK', { duration: 5000 });
     }
   }
 }

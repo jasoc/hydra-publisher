@@ -11,7 +11,6 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { SettingsService } from '../../services/settings.service';
 import { AppSettings } from '../../models/settings.model';
 import { invoke } from '@tauri-apps/api/core';
-import { openUrl } from '@tauri-apps/plugin-opener';
 
 @Component({
   selector: 'app-settings',
@@ -38,13 +37,7 @@ export class SettingsComponent implements OnInit {
   aiToken = '';
   aiModel = '';
   language = '';
-  ebayToken = '';
-  ebayMarketplaceId = 'EBAY_IT';
-  ebayFulfillmentPolicyId = '';
-  ebayPaymentPolicyId = '';
-  ebayReturnPolicyId = '';
-  ebayCategoryId = '';
-  enabledPlatforms: string[] = ['test', 'facebook_marketplace'];
+  enabledPlatforms: string[] = ['subito', 'facebook_marketplace', 'vinted'];
 
   seleniumLoginPlatforms = [
     { id: 'facebook_marketplace', name: 'Facebook Marketplace' },
@@ -53,10 +46,7 @@ export class SettingsComponent implements OnInit {
   ];
 
   allPlatforms = [
-    { id: 'test', name: 'Test Platform' },
-    { id: 'ebay', name: 'eBay' },
     { id: 'subito', name: 'Subito.it' },
-    { id: 'local_test_selenium', name: 'Local Test Selenium' },
     { id: 'facebook_marketplace', name: 'Facebook Marketplace' },
     { id: 'vinted', name: 'Vinted' },
   ];
@@ -72,45 +62,6 @@ export class SettingsComponent implements OnInit {
       this.enabledPlatforms = [...this.enabledPlatforms, id];
     }
   }
-
-  categorySearchQuery = '';
-  categorySearchResults: { categoryId: string; categoryName: string; categoryPath: string }[] = [];
-  searchingCategories = signal(false);
-
-  async searchEbayCategories(): Promise<void> {
-    if (!this.ebayToken || !this.categorySearchQuery.trim()) return;
-    this.searchingCategories.set(true);
-    this.categorySearchResults = [];
-    try {
-      this.categorySearchResults = await invoke<{ categoryId: string; categoryName: string; categoryPath: string }[]>(
-        'search_ebay_categories',
-        { token: this.ebayToken, marketplaceId: this.ebayMarketplaceId, query: this.categorySearchQuery }
-      );
-      if (this.categorySearchResults.length === 0) {
-        this.snackBar.open('No categories found', 'OK', { duration: 2000 });
-      }
-    } catch (err) {
-      this.snackBar.open(`Category search failed: ${err}`, 'OK', { duration: 5000 });
-    } finally {
-      this.searchingCategories.set(false);
-    }
-  }
-
-  selectCategory(cat: { categoryId: string; categoryPath: string }): void {
-    this.ebayCategoryId = cat.categoryId;
-    this.categorySearchResults = [];
-    this.categorySearchQuery = '';
-    this.snackBar.open(`Category set: ${cat.categoryPath} (${cat.categoryId})`, 'OK', { duration: 3000 });
-  }
-
-  ebayMarketplaces = [
-    { value: 'EBAY_IT', label: 'Italy (EBAY_IT)' },
-    { value: 'EBAY_DE', label: 'Germany (EBAY_DE)' },
-    { value: 'EBAY_FR', label: 'France (EBAY_FR)' },
-    { value: 'EBAY_ES', label: 'Spain (EBAY_ES)' },
-    { value: 'EBAY_UK', label: 'United Kingdom (EBAY_UK)' },
-    { value: 'EBAY_US', label: 'United States (EBAY_US)' },
-  ];
 
   languages = [
     { value: 'en', label: 'English' },
@@ -135,61 +86,9 @@ export class SettingsComponent implements OnInit {
       this.aiToken = settings.aiToken;
       this.aiModel = settings.aiModel;
       this.language = settings.language;
-      this.ebayToken = settings.ebayToken || '';
-      this.ebayMarketplaceId = settings.ebayMarketplaceId || 'EBAY_IT';
-      this.ebayFulfillmentPolicyId = settings.ebayFulfillmentPolicyId || '';
-      this.ebayPaymentPolicyId = settings.ebayPaymentPolicyId || '';
-      this.ebayReturnPolicyId = settings.ebayReturnPolicyId || '';
-      this.ebayCategoryId = settings.ebayCategoryId || '';
-      this.enabledPlatforms = settings.enabledPlatforms ?? ['test', 'facebook_marketplace'];
+      this.enabledPlatforms = settings.enabledPlatforms ?? ['subito', 'facebook_marketplace', 'vinted'];
     } finally {
       this.loading.set(false);
-    }
-  }
-
-  loadingPolicies = signal(false);
-
-  async fetchEbayPolicies(): Promise<void> {
-    if (!this.ebayToken) {
-      this.snackBar.open('Enter the eBay token first', 'OK', { duration: 3000 });
-      return;
-    }
-    this.loadingPolicies.set(true);
-    try {
-      const policies = await invoke<{
-        fulfillmentPolicyId: string;
-        fulfillmentPolicyName: string;
-        paymentPolicyId: string;
-        paymentPolicyName: string;
-        returnPolicyId: string;
-        returnPolicyName: string;
-      }>('fetch_ebay_policies', {
-        token: this.ebayToken,
-        marketplaceId: this.ebayMarketplaceId,
-      });
-      this.ebayFulfillmentPolicyId = policies.fulfillmentPolicyId;
-      this.ebayPaymentPolicyId = policies.paymentPolicyId;
-      this.ebayReturnPolicyId = policies.returnPolicyId;
-      this.snackBar.open(
-        `Loaded: ${policies.fulfillmentPolicyName} / ${policies.paymentPolicyName} / ${policies.returnPolicyName}`,
-        'OK',
-        { duration: 4000 }
-      );
-    } catch (err) {
-      const errStr = String(err);
-      if (errStr.startsWith('BUSINESS_POLICY_NOT_ENABLED:')) {
-        const url = errStr.split(':').slice(1).join(':');
-        const ref = this.snackBar.open(
-          'eBay Business Policies not enabled on your account.',
-          'Enable now',
-          { duration: 10000 }
-        );
-        ref.onAction().subscribe(() => openUrl(url));
-      } else {
-        this.snackBar.open(`Failed to fetch policies: ${errStr}`, 'OK', { duration: 5000 });
-      }
-    } finally {
-      this.loadingPolicies.set(false);
     }
   }
 
@@ -202,12 +101,6 @@ export class SettingsComponent implements OnInit {
       aiModel: this.aiModel,
       language: this.language,
       recentFolders: currentSettings?.recentFolders || [],
-      ebayToken: this.ebayToken,
-      ebayMarketplaceId: this.ebayMarketplaceId,
-      ebayFulfillmentPolicyId: this.ebayFulfillmentPolicyId,
-      ebayPaymentPolicyId: this.ebayPaymentPolicyId,
-      ebayReturnPolicyId: this.ebayReturnPolicyId,
-      ebayCategoryId: this.ebayCategoryId,
       fbEmail: currentSettings?.fbEmail || '',
       fbPassword: currentSettings?.fbPassword || '',
       enabledPlatforms: this.enabledPlatforms,
@@ -225,7 +118,6 @@ export class SettingsComponent implements OnInit {
     try {
       const result = await invoke<string[]>('pick_folder');
       if (result.length > 0) {
-        // Extract folder from the first photo path
         const firstFile = result[0];
         const sep = firstFile.includes('\\') ? '\\' : '/';
         const folder = firstFile.substring(0, firstFile.lastIndexOf(sep));
@@ -261,13 +153,7 @@ export class SettingsComponent implements OnInit {
       this.aiToken = settings.aiToken;
       this.aiModel = settings.aiModel;
       this.language = settings.language;
-      this.ebayToken = settings.ebayToken || '';
-      this.ebayMarketplaceId = settings.ebayMarketplaceId || 'EBAY_IT';
-      this.ebayFulfillmentPolicyId = settings.ebayFulfillmentPolicyId || '';
-      this.ebayPaymentPolicyId = settings.ebayPaymentPolicyId || '';
-      this.ebayReturnPolicyId = settings.ebayReturnPolicyId || '';
-      this.ebayCategoryId = settings.ebayCategoryId || '';
-      this.enabledPlatforms = settings.enabledPlatforms ?? ['test', 'facebook_marketplace'];
+      this.enabledPlatforms = settings.enabledPlatforms ?? ['subito', 'facebook_marketplace', 'vinted'];
       this.snackBar.open('All app data cleared.', 'OK', { duration: 3000 });
     } catch (err) {
       this.snackBar.open(`Failed to clear app data: ${err}`, 'OK', { duration: 5000 });
